@@ -2,12 +2,14 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { X, Star } from 'lucide-react';
+import { X, Star, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { MapPin } from '@/types/map';
 import { formatCurrency } from '@/lib/utils';
+import { useItineraryStore } from '@/stores/itinerary-store';
+import toast from 'react-hot-toast';
 
 interface PinPreviewCardProps {
   pin: MapPin;
@@ -15,6 +17,37 @@ interface PinPreviewCardProps {
 }
 
 export function PinPreviewCard({ pin, onClose }: PinPreviewCardProps) {
+  const { current, days, addStop, openPanel } = useItineraryStore();
+
+  const handleAddToItinerary = () => {
+    if (!current) {
+      toast.error('Create an itinerary first using the "Plan itinerary" button');
+      return;
+    }
+    const targetDay = days[0]?.day ?? 1;
+    const existingStops = days.find((d) => d.day === targetDay)?.stops ?? [];
+    addStop({
+      itinerary_id: current.id,
+      listing_id: pin.listingId ?? null,
+      day: targetDay,
+      order: existingStops.length,
+      title: pin.title,
+      description: null,
+      latitude: pin.lat,
+      longitude: pin.lng,
+      location_name: pin.title,
+      cost_usd: pin.price ?? 0,
+      duration_hours: null,
+      start_time: null,
+      end_time: null,
+      transport_to_next: null,
+      transport_duration_minutes: null,
+      notes: null,
+    });
+    openPanel();
+    toast.success(`Added "${pin.title}" to Day ${targetDay}`);
+  };
+
   return (
     <Card className="w-72 shadow-xl border-0 overflow-hidden">
       {pin.imageUrl && (
@@ -66,11 +99,25 @@ export function PinPreviewCard({ pin, onClose }: PinPreviewCardProps) {
             )}
           </div>
         </div>
-        {pin.listingId && (
-          <Link href={`/listing/${pin.listingId}`} className="inline-flex items-center justify-center w-full mt-2 h-7 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] font-medium bg-primary text-primary-foreground hover:bg-primary/90">
-            View details
-          </Link>
-        )}
+        <div className="flex gap-2 mt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 h-7 text-xs gap-1"
+            onClick={handleAddToItinerary}
+          >
+            <PlusCircle className="w-3 h-3" />
+            Add to Itinerary
+          </Button>
+          {pin.listingId && (
+            <Link
+              href={`/listing/${pin.listingId}`}
+              className="flex-1 inline-flex items-center justify-center h-7 rounded-[min(var(--radius-md),12px)] px-2 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              View details
+            </Link>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

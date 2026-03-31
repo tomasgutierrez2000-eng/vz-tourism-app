@@ -183,7 +183,7 @@ export async function streamSearch(
 ): Promise<string> {
   let fullText = '';
 
-  const stream = await anthropic.messages.stream({
+  const stream = await getAnthropicClient().messages.stream({
     model: CLAUDE_MODEL,
     max_tokens: 2048,
     system: SYSTEM_PROMPT,

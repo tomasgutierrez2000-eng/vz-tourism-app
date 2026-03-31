@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ItineraryStopCard } from './ItineraryStopCard';
@@ -12,6 +13,7 @@ interface ItineraryDaySectionProps {
   stops: ItineraryStop[];
   onAddStop?: (day: number) => void;
   onRemoveStop?: (stopId: string) => void;
+  onMoveStop?: (stopId: string, newDay: number, newOrder: number) => void;
   onRemoveDay?: (day: number) => void;
   className?: string;
 }
@@ -22,9 +24,32 @@ export function ItineraryDaySection({
   stops,
   onAddStop,
   onRemoveStop,
+  onMoveStop,
   onRemoveDay,
   className,
 }: ItineraryDaySectionProps) {
+  const dragStopIdRef = useRef<string | null>(null);
+  const dragSourceDayRef = useRef<number | null>(null);
+
+  const handleDragStart = (stopId: string, sourceDay: number) => {
+    dragStopIdRef.current = stopId;
+    dragSourceDayRef.current = sourceDay;
+  };
+
+  const handleDrop = (e: React.DragEvent, targetOrder: number) => {
+    e.preventDefault();
+    const stopId = dragStopIdRef.current;
+    if (!stopId || !onMoveStop) return;
+    onMoveStop(stopId, day, targetOrder);
+    dragStopIdRef.current = null;
+    dragSourceDayRef.current = null;
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
   return (
     <div className={cn('space-y-2', className)}>
       {/* Day header */}
@@ -51,18 +76,38 @@ export function ItineraryDaySection({
       </div>
 
       {/* Stops */}
-      <div className="ml-3 border-l-2 border-muted pl-3 space-y-2">
-        {stops.map((stop) => (
-          <ItineraryStopCard
+      <div
+        className="ml-3 border-l-2 border-muted pl-3 space-y-2"
+        onDragOver={handleDragOver}
+        onDrop={(e) => handleDrop(e, stops.length)}
+      >
+        {stops.map((stop, idx) => (
+          <div
             key={stop.id}
-            stop={stop}
-            onRemove={onRemoveStop}
-            isDraggable
-          />
+            draggable
+            onDragStart={() => handleDragStart(stop.id, day)}
+            onDrop={(e) => {
+              e.stopPropagation();
+              handleDrop(e, idx);
+            }}
+            onDragOver={handleDragOver}
+          >
+            <ItineraryStopCard
+              stop={stop}
+              onRemove={onRemoveStop}
+              isDraggable
+            />
+          </div>
         ))}
 
         {stops.length === 0 && (
-          <p className="text-xs text-muted-foreground py-2 italic">No stops yet</p>
+          <div
+            className="py-4 border-2 border-dashed border-muted rounded-lg text-center"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, 0)}
+          >
+            <p className="text-xs text-muted-foreground">Drop stops here or add one below</p>
+          </div>
         )}
 
         {onAddStop && (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Plus, Share2, Save, ChevronRight, Map } from 'lucide-react';
+import { X, Plus, Share2, Save, Map, Sparkles, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ItineraryDaySection } from './ItineraryDaySection';
@@ -23,15 +23,23 @@ export function ItineraryPanel({ className }: ItineraryPanelProps) {
     isDirty,
     isSaving,
     isOpen,
+    isOptimizing,
     closePanel,
     addDay,
     removeDay,
     removeStop,
+    moveStop,
     save,
     shareItinerary,
+    optimizeItinerary,
   } = useItinerary();
 
   if (!isOpen || !current) return null;
+
+  const dayCostBreakdown = days.map((day) => ({
+    label: `Day ${day.day}`,
+    amount: day.stops.reduce((sum, s) => sum + (s.cost_usd || 0), 0),
+  }));
 
   return (
     <>
@@ -50,10 +58,27 @@ export function ItineraryPanel({ className }: ItineraryPanelProps) {
               <h3 className="font-semibold text-sm line-clamp-1">{current.title}</h3>
               <p className="text-xs text-muted-foreground">
                 {days.length} day{days.length !== 1 ? 's' : ''}
+                {isDirty && (
+                  <span className="ml-1 text-amber-500">• unsaved</span>
+                )}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-7 h-7"
+              onClick={() => optimizeItinerary()}
+              disabled={isOptimizing || days.every((d) => d.stops.length === 0)}
+              title="Optimize route with AI"
+            >
+              {isOptimizing ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="w-3.5 h-3.5" />
+              )}
+            </Button>
             {isDirty && (
               <Button
                 variant="ghost"
@@ -63,7 +88,11 @@ export function ItineraryPanel({ className }: ItineraryPanelProps) {
                 disabled={isSaving}
                 title="Save"
               >
-                <Save className="w-3.5 h-3.5" />
+                {isSaving ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
               </Button>
             )}
             <Button
@@ -96,6 +125,7 @@ export function ItineraryPanel({ className }: ItineraryPanelProps) {
                 stops={day.stops}
                 onAddStop={(d) => setAddStopDay(d)}
                 onRemoveStop={removeStop}
+                onMoveStop={moveStop}
                 onRemoveDay={days.length > 1 ? removeDay : undefined}
               />
             ))}
@@ -110,14 +140,24 @@ export function ItineraryPanel({ className }: ItineraryPanelProps) {
               Add day
             </Button>
 
-            <CostEstimator totalCost={totalCost} />
+            <CostEstimator
+              totalCost={totalCost}
+              breakdown={dayCostBreakdown.filter((d) => d.amount > 0)}
+            />
           </div>
         </ScrollArea>
 
         {isDirty && (
           <div className="p-4 border-t bg-muted/30">
             <Button size="sm" className="w-full" onClick={() => save()} disabled={isSaving}>
-              {isSaving ? 'Saving...' : 'Save changes'}
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save changes'
+              )}
             </Button>
           </div>
         )}

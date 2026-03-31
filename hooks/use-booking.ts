@@ -83,15 +83,15 @@ export function useBooking(listing: Listing) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          booking_id: currentBooking.id,
-          success_url: `${window.location.origin}/bookings/${currentBooking.id}?success=true`,
-          cancel_url: `${window.location.origin}/listing/${listing.slug}?cancelled=true`,
+          bookingId: currentBooking.id,
+          successUrl: `${window.location.origin}/bookings/${currentBooking.id}?success=true`,
+          cancelUrl: `${window.location.origin}/listing/${listing.slug}?cancelled=true`,
         }),
       });
 
       if (!response.ok) throw new Error('Failed to create checkout session');
 
-      const { checkout_url } = await response.json();
+      const { url: checkout_url } = await response.json();
       window.location.href = checkout_url;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Payment failed');

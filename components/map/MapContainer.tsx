@@ -190,6 +190,36 @@ export function MapContainer({
     updateMarkers().catch(console.error);
   }, [pins, mapLoaded, handlePinClick]);
 
+  // Auto-fit bounds when pins change
+  useEffect(() => {
+    if (!mapInstanceRef.current || !mapLoaded || pins.length === 0) return;
+
+    async function fitPinBounds() {
+      const mapboxgl = (await import('mapbox-gl')).default;
+
+      if (pins.length === 1) {
+        const mapInstance = mapInstanceRef.current as {
+          flyTo: (opts: { center: [number, number]; zoom: number }) => void;
+        };
+        mapInstance.flyTo({ center: [pins[0].lng, pins[0].lat], zoom: 12 });
+        return;
+      }
+
+      const LngLatBounds = (mapboxgl as { LngLatBounds: new () => unknown }).LngLatBounds;
+      const bounds = new LngLatBounds() as {
+        extend: (coords: [number, number]) => void;
+      };
+      pins.forEach((pin) => bounds.extend([pin.lng, pin.lat]));
+
+      const mapInstance = mapInstanceRef.current as {
+        fitBounds: (bounds: unknown, opts: unknown) => void;
+      };
+      mapInstance.fitBounds(bounds, { padding: 80, maxZoom: 14, duration: 800 });
+    }
+
+    fitPinBounds().catch(console.error);
+  }, [pins, mapLoaded]);
+
   // Fly to center when it changes
   useEffect(() => {
     if (!mapInstanceRef.current || !mapLoaded) return;

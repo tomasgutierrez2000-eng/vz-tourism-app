@@ -1,14 +1,34 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useItineraryStore } from '@/stores/itinerary-store';
-import { createClient } from '@/lib/supabase/client';
 import type { Itinerary } from '@/types/database';
 import toast from 'react-hot-toast';
 
 export function useItinerary() {
   const store = useItineraryStore();
   const [isCreating, setIsCreating] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Auto-save every 30 seconds when there are unsaved changes
+  useEffect(() => {
+    if (saveTimerRef.current) clearInterval(saveTimerRef.current);
+
+    if (store.isOpen && store.current) {
+      saveTimerRef.current = setInterval(() => {
+        if (store.isDirty && !store.isSaving) {
+          store.save().catch(() => {
+            // silent fail for auto-save
+          });
+        }
+      }, 30_000);
+    }
+
+    return () => {
+      if (saveTimerRef.current) clearInterval(saveTimerRef.current);
+    };
+  }, [store.isOpen, store.current?.id, store.isDirty, store.isSaving]);
 
   const createNew = useCallback(
     async (title = 'My Venezuela Adventure') => {
@@ -85,12 +105,103 @@ export function useItinerary() {
     }
   }, [store]);
 
+  const optimizeItinerary = useCallback(async () => {
+    const { current, days } = store;
+    if (!current || days.length === 0) return;
+
+    setIsOptimizing(true);
+    try {
+      const response = await fetch('/api/ai/optimize-itinerary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itinerary_id: current.id,
+          days: days.map((d) => ({
+            day: d.day,
+            stops: d.stops.map((s) => ({
+              id: s.id,
+              title: s.title,
+              latitude: s.latitude,
+              longitude: s.longitude,
+              duration_hours: s.duration_hours,
+            })),
+          })),
+        }),
+      });
+
+      if (!response.ok) throw new Error('Optimization failed');
+
+      const { suggestions } = await response.json();
+      toast.success(suggestions || 'Itinerary optimized! Review the updated order.');
+    } catch {
+      toast.error('Could not optimize itinerary. Please try again.');
+    } finally {
+      setIsOptimizing(false);
+    }
+  }, [store]);
+
+  const addListingToItinerary = useCallback(
+    async (listing: {
+      id: string;
+      title: string;
+      price_usd: number;
+      latitude?: number | null;
+      longitude?: number | null;
+      location_name?: string | null;
+      duration_hours?: number | null;
+      short_description?: string | null;
+    }) => {
+      let currentItinerary = store.current;
+
+      if (!currentItinerary) {
+        // Auto-create an itinerary
+        try {
+          const created = await createNew('My Venezuela Adventure');
+          currentItinerary = created;
+        } catch {
+          return;
+        }
+      }
+
+      if (!currentItinerary) return;
+
+      const targetDay = store.days[0]?.day ?? 1;
+      const existingStops = store.days.find((d) => d.day === targetDay)?.stops ?? [];
+
+      store.addStop({
+        itinerary_id: currentItinerary.id,
+        listing_id: listing.id,
+        day: targetDay,
+        order: existingStops.length,
+        title: listing.title,
+        description: listing.short_description ?? null,
+        latitude: listing.latitude ?? null,
+        longitude: listing.longitude ?? null,
+        location_name: listing.location_name ?? null,
+        cost_usd: listing.price_usd,
+        duration_hours: listing.duration_hours ?? null,
+        start_time: null,
+        end_time: null,
+        transport_to_next: null,
+        transport_duration_minutes: null,
+        notes: null,
+      });
+
+      store.openPanel();
+      toast.success(`"${listing.title}" added to Day ${targetDay}`);
+    },
+    [store, createNew]
+  );
+
   return {
     ...store,
     isCreating,
+    isOptimizing,
     createNew,
     loadItinerary,
     shareItinerary,
     save: saveWithFeedback,
+    optimizeItinerary,
+    addListingToItinerary,
   };
 }
