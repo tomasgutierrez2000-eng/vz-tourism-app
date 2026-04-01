@@ -53,7 +53,7 @@ export function useSearch() {
               try {
                 const parsed = JSON.parse(data);
                 if (parsed.type === 'text') {
-                  searchStore.appendStreamText(parsed.content);
+                  searchStore.appendStreamText(parsed.text);
                 } else if (parsed.type === 'listings') {
                   const listings: Listing[] = parsed.data;
                   searchStore.setResults(listings);
