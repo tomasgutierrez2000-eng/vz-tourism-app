@@ -29,6 +29,8 @@ export function useRealtime<T>({
     if (!enabled) return;
 
     const supabase = createClient();
+    if (!supabase) return;
+
     const channelName = `${table}-${filter || 'all'}-${Date.now()}`;
 
     const channel = supabase.channel(channelName);

@@ -13,11 +13,19 @@ export const metadata: Metadata = {
 };
 
 export default async function SafetyPage() {
-  const supabase = await createClient();
-  const { data: safetyZones } = await supabase
-    .from('safety_zones')
-    .select('*')
-    .order('level');
+  let safetyZones = null;
+  try {
+    const supabase = await createClient();
+    if (supabase) {
+      const { data } = await supabase
+        .from('safety_zones')
+        .select('*')
+        .order('level');
+      safetyZones = data;
+    }
+  } catch {
+    // Supabase not configured
+  }
 
   return (
     <div className="container px-4 py-8 max-w-4xl mx-auto space-y-8">

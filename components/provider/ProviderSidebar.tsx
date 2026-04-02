@@ -13,6 +13,7 @@ import {
   Users,
   Settings,
   ChevronLeft,
+  Wallet,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Logo } from '@/components/common/Logo';
@@ -27,6 +28,7 @@ const navItems = [
   { href: '/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/dashboard/marketing', icon: Share2, label: 'Marketing' },
   { href: '/dashboard/revenue', icon: DollarSign, label: 'Revenue' },
+  { href: '/dashboard/payouts', icon: Wallet, label: 'Payouts' },
   { href: '/dashboard/guests', icon: Users, label: 'Guests' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ];

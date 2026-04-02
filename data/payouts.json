@@ -1,0 +1,54 @@
+[
+  {
+    "id": "po_001",
+    "provider_id": "prov_001",
+    "amount_usd": 3240,
+    "fee_usd": 0,
+    "net_amount": 3240,
+    "method": "zelle",
+    "method_details": { "email": "provider@example.com" },
+    "status": "completed",
+    "reference": "PAY-2026-03-001",
+    "created_at": "2026-03-07T10:00:00.000Z",
+    "completed_at": "2026-03-07T14:00:00.000Z"
+  },
+  {
+    "id": "po_002",
+    "provider_id": "prov_001",
+    "amount_usd": 4720,
+    "fee_usd": 0,
+    "net_amount": 4720,
+    "method": "zelle",
+    "method_details": { "email": "provider@example.com" },
+    "status": "completed",
+    "reference": "PAY-2026-03-002",
+    "created_at": "2026-03-14T10:00:00.000Z",
+    "completed_at": "2026-03-14T16:00:00.000Z"
+  },
+  {
+    "id": "po_003",
+    "provider_id": "prov_001",
+    "amount_usd": 5680,
+    "fee_usd": 0,
+    "net_amount": 5680,
+    "method": "usdt",
+    "method_details": { "address": "TRx9vZtourismProviderAddress001", "network": "TRC-20" },
+    "status": "completed",
+    "reference": "PAY-2026-03-003",
+    "created_at": "2026-03-21T10:00:00.000Z",
+    "completed_at": "2026-03-21T12:00:00.000Z"
+  },
+  {
+    "id": "po_004",
+    "provider_id": "prov_001",
+    "amount_usd": 3960,
+    "fee_usd": 0,
+    "net_amount": 3960,
+    "method": "zelle",
+    "method_details": { "email": "provider@example.com" },
+    "status": "processing",
+    "reference": "PAY-2026-03-004",
+    "created_at": "2026-03-28T10:00:00.000Z",
+    "completed_at": null
+  }
+]

@@ -19,6 +19,7 @@ export const metadata: Metadata = { title: 'Admin: CMS' };
 
 export default async function AdminCMSPage() {
   const supabase = await createClient();
+  if (!supabase) return <div className="p-6 text-muted-foreground">Database not configured.</div>;
   const { data: guides } = await supabase
     .from('guides')
     .select('*, author:users(full_name)')

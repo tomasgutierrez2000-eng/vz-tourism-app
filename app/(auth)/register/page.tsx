@@ -33,6 +33,7 @@ export default function RegisterPage() {
     setIsLoading(true);
     try {
       const supabase = createClient();
+      if (!supabase) throw new Error('Authentication is not configured');
       const { error } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,

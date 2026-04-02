@@ -4,6 +4,7 @@ import { itinerarySchema } from '@/lib/validators';
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
+  if (!supabase) return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
   const { searchParams } = new URL(request.url);
   const mine = searchParams.get('mine') === 'true';
   const limit = parseInt(searchParams.get('limit') || '20');
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
+  if (!supabase) return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

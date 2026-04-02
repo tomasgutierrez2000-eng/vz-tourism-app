@@ -12,6 +12,7 @@ export const metadata: Metadata = { title: 'My Listings' };
 
 export default async function ListingsPage() {
   const supabase = await createClient();
+  if (!supabase) redirect('/login');
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 

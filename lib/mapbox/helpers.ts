@@ -77,8 +77,14 @@ export function getCategoryIcon(category: string): string {
 
 export function getCategoryColor(category: string): string {
   const colors: Record<string, string> = {
+    // Scraped business categories
+    hotel: '#3B82F6',
+    restaurant: '#F97316',
+    experience: '#22C55E',
+    other: '#6B7280',
+    // Legacy listing categories
     beaches: '#0EA5E9',
-    mountains: '#6B7280',
+    mountains: '#8B5CF6',
     cities: '#8B5CF6',
     'eco-tours': '#22C55E',
     gastronomy: '#F97316',
@@ -86,8 +92,15 @@ export function getCategoryColor(category: string): string {
     wellness: '#EC4899',
     cultural: '#F59E0B',
   };
-  return colors[category] || '#0EA5E9';
+  return colors[category] || '#6B7280';
 }
+
+export const BUSINESS_CATEGORIES: { key: string; label: string; color: string }[] = [
+  { key: 'hotel', label: 'Hotels & Posadas', color: '#3B82F6' },
+  { key: 'restaurant', label: 'Restaurants', color: '#F97316' },
+  { key: 'experience', label: 'Tours & Experiences', color: '#22C55E' },
+  { key: 'other', label: 'Other', color: '#6B7280' },
+];
 
 export function getSafetyColor(level: string): string {
   const colors: Record<string, string> = {

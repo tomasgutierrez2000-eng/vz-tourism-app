@@ -8,6 +8,7 @@ export const metadata: Metadata = { title: 'Admin: Analytics' };
 
 export default async function AdminAnalyticsPage() {
   const supabase = await createClient();
+  if (!supabase) return <div className="p-6 text-muted-foreground">Database not configured.</div>;
 
   const [
     { count: totalUsers },

@@ -10,6 +10,7 @@ export const metadata: Metadata = { title: 'Guests' };
 
 export default async function GuestsPage() {
   const supabase = await createClient();
+  if (!supabase) redirect('/login');
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 

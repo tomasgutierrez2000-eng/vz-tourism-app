@@ -36,7 +36,7 @@ export const useAuthStore = create<AuthStore>()(
       signOut: async () => {
         const { createClient } = await import('@/lib/supabase/client');
         const supabase = createClient();
-        await supabase.auth.signOut();
+        if (supabase) await supabase.auth.signOut();
         set({ user: null, profile: null });
       },
 
@@ -46,6 +46,7 @@ export const useAuthStore = create<AuthStore>()(
 
         const { createClient } = await import('@/lib/supabase/client');
         const supabase = createClient();
+        if (!supabase) return;
 
         const { data: updated, error } = await supabase
           .from('users')

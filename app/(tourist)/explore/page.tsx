@@ -9,22 +9,32 @@ export const metadata: Metadata = {
 };
 
 export default async function ExplorePage() {
-  const supabase = await createClient();
+  let trending = null;
+  let newest = null;
 
-  const [{ data: trending }, { data: newest }] = await Promise.all([
-    supabase
-      .from('itineraries')
-      .select('*, user:users(id, full_name, avatar_url, role)')
-      .eq('is_public', true)
-      .order('likes', { ascending: false })
-      .limit(24),
-    supabase
-      .from('itineraries')
-      .select('*, user:users(id, full_name, avatar_url, role)')
-      .eq('is_public', true)
-      .order('created_at', { ascending: false })
-      .limit(24),
-  ]);
+  try {
+    const supabase = await createClient();
+    if (supabase) {
+      const [{ data: trendingData }, { data: newestData }] = await Promise.all([
+        supabase
+          .from('itineraries')
+          .select('*, user:users(id, full_name, avatar_url, role)')
+          .eq('is_public', true)
+          .order('likes', { ascending: false })
+          .limit(24),
+        supabase
+          .from('itineraries')
+          .select('*, user:users(id, full_name, avatar_url, role)')
+          .eq('is_public', true)
+          .order('created_at', { ascending: false })
+          .limit(24),
+      ]);
+      trending = trendingData;
+      newest = newestData;
+    }
+  } catch {
+    // Supabase not configured, show page without DB data
+  }
 
   return (
     <div className="container px-4 py-8">

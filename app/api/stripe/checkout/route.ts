@@ -1,40 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { createCheckoutSession } from '@/lib/stripe/server';
+import { getBooking, updateBookingStatus } from '@/lib/bookings-store';
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
 
-  const body = await request.json();
-  const { bookingId, successUrl, cancelUrl } = body;
+  const { bookingId, successUrl, cancelUrl } = body as {
+    bookingId?: string;
+    successUrl?: string;
+    cancelUrl?: string;
+  };
 
-  if (!bookingId) return NextResponse.json({ error: 'bookingId is required' }, { status: 400 });
+  if (!bookingId) {
+    return NextResponse.json({ error: 'bookingId is required' }, { status: 400 });
+  }
 
-  const { data: booking } = await supabase
-    .from('bookings')
-    .select('*, listing:listings(title, cover_image_url), tourist:users(email)')
-    .eq('id', bookingId)
-    .eq('tourist_id', user.id)
-    .single();
-
-  if (!booking) return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+  const booking = getBooking(bookingId);
+  if (!booking) {
+    return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+  }
   if (booking.status !== 'pending') {
     return NextResponse.json({ error: 'Booking is not pending payment' }, { status: 400 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3111';
 
   try {
     const session = await createCheckoutSession({
       bookingId,
-      listingTitle: booking.listing?.title || 'Tourism Experience',
+      listingTitle: booking.listing_name,
       amountUsd: booking.total_usd,
-      touristEmail: booking.tourist?.email || user.email!,
-      successUrl: successUrl || `${appUrl}/booking/${bookingId}/success`,
-      cancelUrl: cancelUrl || `${appUrl}/listing/${booking.listing?.slug || ''}`,
-      metadata: { bookingId, userId: user.id },
+      touristEmail: booking.guest_email,
+      successUrl: successUrl || `${appUrl}/booking/confirmation?id=${bookingId}`,
+      cancelUrl:
+        cancelUrl ||
+        (booking.listing_slug ? `${appUrl}/listing/${booking.listing_slug}` : `${appUrl}/`),
+      metadata: { bookingId },
+    });
+
+    updateBookingStatus(bookingId, 'pending', {
+      stripe_checkout_session_id: session.id,
     });
 
     return NextResponse.json({ sessionId: session.id, url: session.url });

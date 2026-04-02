@@ -1,0 +1,32 @@
+[
+  {
+    "listing_id": "test-listing",
+    "date": "2026-04-15",
+    "is_available": false,
+    "price_override": null,
+    "notes": null,
+    "room_type": null,
+    "blocked_reason": "maintenance",
+    "booking_id": null
+  },
+  {
+    "listing_id": "test-listing",
+    "date": "2026-04-16",
+    "is_available": false,
+    "price_override": null,
+    "notes": null,
+    "room_type": null,
+    "blocked_reason": "maintenance",
+    "booking_id": null
+  },
+  {
+    "listing_id": "test-listing",
+    "date": "2026-04-17",
+    "is_available": false,
+    "price_override": null,
+    "notes": null,
+    "room_type": null,
+    "blocked_reason": "maintenance",
+    "booking_id": null
+  }
+]
