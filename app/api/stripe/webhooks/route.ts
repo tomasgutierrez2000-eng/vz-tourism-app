@@ -10,7 +10,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 });
   }
 
-  let event: { type: string; data: { object: Record<string, unknown> } };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let event: { type: string; data: { object: any } };
   try {
     event = await handleWebhookEvent(body, sig);
   } catch (err) {

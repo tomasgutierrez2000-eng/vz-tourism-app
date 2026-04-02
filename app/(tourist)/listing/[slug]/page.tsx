@@ -93,7 +93,7 @@ export default async function ListingPage({ params }: Props) {
     slug: scraped.slug,
     description: scraped.description,
     short_description: scraped.description.slice(0, 160),
-    category: mapTypeToCategory(scraped.type),
+    category: mapTypeToCategory(scraped.type) as Listing['category'],
     tags: scraped.category_tags,
     region: scraped.region,
     location_name: scraped.address || scraped.region,

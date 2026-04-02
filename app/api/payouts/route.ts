@@ -8,7 +8,7 @@ const INSTANT_PAYOUT_FEE_RATE = 0.015; // 1.5%
 const createPayoutSchema = z.object({
   provider_id: z.string().min(1),
   method: z.enum(['zelle', 'usdt', 'binance', 'bank']),
-  method_details: z.record(z.string()),
+  method_details: z.record(z.string(), z.string()),
   instant: z.boolean().default(false),
 });
 
