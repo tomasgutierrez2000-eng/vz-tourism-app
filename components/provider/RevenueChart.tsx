@@ -44,7 +44,7 @@ export function RevenueChart({ data }: RevenueChartProps) {
                 axisLine={false}
               />
               <Tooltip
-                formatter={(value: number) => [`$${value.toFixed(2)}`, 'Revenue']}
+                formatter={(value) => [`$${(value as number).toFixed(2)}`, 'Revenue']}
                 labelStyle={{ fontSize: 11 }}
                 contentStyle={{ fontSize: 11 }}
               />

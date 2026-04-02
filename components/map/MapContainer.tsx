@@ -283,7 +283,8 @@ export function MapContainer({
 
       (mapboxgl as { accessToken: string }).accessToken = token!;
 
-      map = new (mapboxgl as { Map: new (opts: unknown) => MapboxMap }).Map({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      map = new (mapboxgl as unknown as { Map: new (opts: unknown) => MapboxMap }).Map({
         container: mapRef.current!,
         style: isDarkMode
           ? 'mapbox://styles/mapbox/dark-v11'

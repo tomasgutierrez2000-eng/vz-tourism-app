@@ -76,7 +76,7 @@ export function AnalyticsCharts({
                 <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={4} tickLine={false} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v}`} tickLine={false} axisLine={false} />
-                <Tooltip formatter={(value: number) => [`$${value.toFixed(2)}`, 'Revenue']} />
+                <Tooltip formatter={(value) => [`$${(value as number).toFixed(2)}`, 'Revenue']} />
                 <Line
                   type="monotone"
                   dataKey="revenue"
@@ -148,7 +148,7 @@ export function AnalyticsCharts({
                     <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => [value, 'Bookings']} />
+                <Tooltip formatter={(value) => [value as number, 'Bookings']} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
@@ -177,7 +177,7 @@ export function AnalyticsCharts({
                   tickLine={false}
                   axisLine={false}
                 />
-                <Tooltip formatter={(value: number) => [`${value.toFixed(0)}%`, 'Occupancy']} />
+                <Tooltip formatter={(value) => [`${(value as number).toFixed(0)}%`, 'Occupancy']} />
                 <Area
                   type="monotone"
                   dataKey="occupancy"
