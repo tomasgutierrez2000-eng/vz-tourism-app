@@ -42,6 +42,7 @@ export default function ProviderRegisterPage() {
     setIsLoading(true);
     try {
       const supabase = createClient();
+      if (!supabase) throw new Error('Authentication is not configured');
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,

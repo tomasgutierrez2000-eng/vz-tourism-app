@@ -21,13 +21,21 @@ export default async function CategoryPage({ params }: Props) {
   const category = LISTING_CATEGORIES.find((c) => c.value === slug);
   if (!category) notFound();
 
-  const supabase = await createClient();
-  const { data: listings } = await supabase
-    .from('listings')
-    .select('*, provider:providers(business_name, is_verified)')
-    .eq('is_published', true)
-    .eq('category', slug as ListingCategory)
-    .order('rating', { ascending: false });
+  let listings = null;
+  try {
+    const supabase = await createClient();
+    if (supabase) {
+      const { data } = await supabase
+        .from('listings')
+        .select('*, provider:providers(business_name, is_verified)')
+        .eq('is_published', true)
+        .eq('category', slug as ListingCategory)
+        .order('rating', { ascending: false });
+      listings = data;
+    }
+  } catch {
+    // Supabase not configured
+  }
 
   return (
     <div className="container px-4 py-8">

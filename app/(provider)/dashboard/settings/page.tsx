@@ -11,12 +11,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { providerSchema } from '@/lib/validators';
+import { PayoutMethodForm } from '@/components/provider/PayoutMethodForm';
 
 type ProviderForm = z.infer<typeof providerSchema>;
 
 export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
-  const [providerId, setProviderId] = useState<string>('');
+  const [providerId, setProviderId] = useState<string>('prov_001');
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<ProviderForm>({
     resolver: zodResolver(providerSchema) as any,
@@ -68,7 +69,7 @@ export default function SettingsPage() {
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Provider Settings</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">Manage your business profile</p>
+        <p className="text-muted-foreground text-sm mt-0.5">Manage your business profile and payment preferences</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -109,6 +110,9 @@ export default function SettingsPage() {
           {isLoading ? 'Saving...' : 'Save Settings'}
         </Button>
       </form>
+
+      {/* Payment Methods section */}
+      <PayoutMethodForm providerId={providerId} />
     </div>
   );
 }

@@ -1,0 +1,15 @@
+{
+  "prov_001": {
+    "payout_method": "zelle",
+    "zelle_email": "",
+    "zelle_phone": "",
+    "usdt_address": "",
+    "usdt_network": "TRC-20",
+    "binance_username": "",
+    "bank_account_name": "",
+    "bank_account_number": "",
+    "bank_routing_number": "",
+    "bank_name": "",
+    "updated_at": null
+  }
+}

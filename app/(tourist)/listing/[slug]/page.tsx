@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { ListingDetail } from '@/components/listing/ListingDetail';
 import { createClient } from '@/lib/supabase/server';
+import { getListingBySlug, mapTypeToCategory } from '@/lib/local-listings';
 import type { Listing, Review } from '@/types/database';
 
 interface Props {
@@ -10,54 +11,117 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const supabase = await createClient();
-  const { data: listing } = await supabase
-    .from('listings')
-    .select('title, short_description, cover_image_url')
-    .eq('slug', slug)
-    .single();
 
-  if (!listing) return { title: 'Listing Not Found' };
+  try {
+    const supabase = await createClient();
+    if (!supabase) throw new Error('Supabase not configured');
+    const { data: listing } = await supabase
+      .from('listings')
+      .select('title, short_description, cover_image_url')
+      .eq('slug', slug)
+      .single();
 
-  return {
-    title: listing.title,
-    description: listing.short_description,
-    openGraph: {
-      title: listing.title,
-      description: listing.short_description,
-      images: listing.cover_image_url ? [listing.cover_image_url] : [],
-    },
-  };
+    if (listing) {
+      return {
+        title: listing.title,
+        description: listing.short_description,
+        openGraph: {
+          title: listing.title,
+          description: listing.short_description,
+          images: listing.cover_image_url ? [listing.cover_image_url] : [],
+        },
+      };
+    }
+  } catch {
+    // Supabase not configured, fall through to local data
+  }
+
+  const scraped = getListingBySlug(slug);
+  if (scraped) {
+    return {
+      title: scraped.name,
+      description: scraped.description,
+    };
+  }
+
+  return { title: 'Listing Not Found' };
 }
 
 export default async function ListingPage({ params }: Props) {
   const { slug } = await params;
-  const supabase = await createClient();
 
-  const { data: listing } = await supabase
-    .from('listings')
-    .select('*, provider:providers(*), photos:listing_photos(*)')
-    .eq('slug', slug)
-    .eq('is_published', true)
-    .single();
+  try {
+    const supabase = await createClient();
+    if (!supabase) throw new Error('Supabase not configured');
+    const { data: supabaseListing } = await supabase
+      .from('listings')
+      .select('*, provider:providers(*), photos:listing_photos(*)')
+      .eq('slug', slug)
+      .eq('is_published', true)
+      .single();
 
-  if (!listing) notFound();
+    if (supabaseListing) {
+      const { data: reviews } = await supabase
+        .from('reviews')
+        .select('*, tourist:users(id, full_name, avatar_url)')
+        .eq('listing_id', supabaseListing.id)
+        .eq('is_approved', true)
+        .order('created_at', { ascending: false })
+        .limit(20);
 
-  const { data: reviews } = await supabase
-    .from('reviews')
-    .select('*, tourist:users(id, full_name, avatar_url)')
-    .eq('listing_id', listing.id)
-    .eq('is_approved', true)
-    .order('created_at', { ascending: false })
-    .limit(20);
+      void supabase.rpc('increment_listing_views', { listing_id: supabaseListing.id });
 
-  // Increment views (fire and forget)
-  void supabase.rpc('increment_listing_views', { listing_id: listing.id });
+      return (
+        <ListingDetail
+          listing={supabaseListing as Listing}
+          reviews={(reviews || []) as Review[]}
+        />
+      );
+    }
+  } catch {
+    // Supabase not configured, fall through to local data
+  }
 
-  return (
-    <ListingDetail
-      listing={listing as Listing}
-      reviews={(reviews || []) as Review[]}
-    />
-  );
+  // Fallback to scraped local data
+  const scraped = getListingBySlug(slug);
+  if (!scraped) notFound();
+
+  const listing: Listing = {
+    id: scraped.id,
+    provider_id: scraped.provider_id,
+    title: scraped.name,
+    slug: scraped.slug,
+    description: scraped.description,
+    short_description: scraped.description.slice(0, 160),
+    category: mapTypeToCategory(scraped.type) as Listing['category'],
+    tags: scraped.category_tags,
+    region: scraped.region,
+    location_name: scraped.address || scraped.region,
+    latitude: scraped.latitude,
+    longitude: scraped.longitude,
+    address: scraped.address || null,
+    price_usd: 0,
+    price_ves: null,
+    currency: 'USD',
+    duration_hours: null,
+    max_guests: 1,
+    min_guests: 1,
+    is_published: true,
+    is_featured: false,
+    safety_level: 'yellow',
+    rating: scraped.avg_rating || 0,
+    total_reviews: scraped.review_count,
+    total_bookings: 0,
+    amenities: [],
+    languages: ['es'],
+    includes: [],
+    excludes: [],
+    cancellation_policy: '',
+    meeting_point: null,
+    cover_image_url: null,
+    created_at: scraped.created_at || new Date().toISOString(),
+    updated_at: scraped.updated_at || new Date().toISOString(),
+  };
+
+  return <ListingDetail listing={listing} reviews={[]} />;
 }

@@ -1,78 +1,215 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { bookingSchema } from '@/lib/validators';
+import { z } from 'zod';
+import {
+  createBooking,
+  getAllBookings,
+  getBookingsByEmail,
+  type PaymentMethod,
+} from '@/lib/bookings-store';
+import { PLATFORM_COMMISSION_RATE } from '@/lib/constants';
+import { createCheckoutSession } from '@/lib/stripe/server';
+
+// Load scraped listings for price/capacity lookups
+let _listings: Record<string, unknown>[] | null = null;
+function getListings() {
+  if (_listings) return _listings;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    _listings = require('@/data/scraped-listings.json') as Record<string, unknown>[];
+  } catch {
+    _listings = [];
+  }
+  return _listings;
+}
+
+const createBookingSchema = z.object({
+  listing_id: z.string().min(1),
+  check_in: z.string().min(1),
+  check_out: z.string().optional(),
+  // Accept both 'guests' (old) and 'guest_count' (new)
+  guests: z.number().int().positive().optional(),
+  guest_count: z.number().int().positive().optional(),
+  guest_name: z.string().min(1),
+  guest_email: z.string().email(),
+  guest_phone: z.string().optional(),
+  special_requests: z.string().max(500).optional(),
+  notes: z.string().max(500).optional(),
+  payment_method: z.enum(['card', 'zelle', 'usdt', 'arrival']).default('card'),
+});
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status');
-  const limit = parseInt(searchParams.get('limit') || '20');
-  const offset = parseInt(searchParams.get('offset') || '0');
+  const email = searchParams.get('email');
 
-  const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single();
+  let bookings = email ? getBookingsByEmail(email) : getAllBookings();
+  if (status) bookings = bookings.filter((b) => b.status === status);
 
-  let query = supabase
-    .from('bookings')
-    .select('*, listing:listings(title, cover_image_url, slug), tourist:users(full_name, email)', { count: 'exact' })
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
+  // Sort newest first
+  bookings = [...bookings].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
 
-  if (profile?.role === 'tourist') {
-    query = query.eq('tourist_id', user.id);
-  } else if (profile?.role === 'provider') {
-    const { data: provider } = await supabase.from('providers').select('id').eq('user_id', user.id).single();
-    const { data: listings } = await supabase.from('listings').select('id').eq('provider_id', provider?.id || '');
-    const listingIds = listings?.map((l) => l.id) || [];
-    query = query.in('listing_id', listingIds);
-  }
-
-  if (status) query = query.eq('status', status);
-
-  const { data, error, count } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data, count, offset, limit });
+  return NextResponse.json({ data: bookings, count: bookings.length });
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const body = await request.json();
-  const parsed = bookingSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-
-  // Check availability
-  const { data: listing } = await supabase
-    .from('listings')
-    .select('price_usd, is_published')
-    .eq('id', parsed.data.listing_id)
-    .single();
-
-  if (!listing || !listing.is_published) {
-    return NextResponse.json({ error: 'Listing not available' }, { status: 404 });
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const guests = parsed.data.guests || 1;
-  const checkIn = new Date(parsed.data.check_in);
-  const checkOut = parsed.data.check_out ? new Date(parsed.data.check_out) : checkIn;
-  const nights = Math.max(1, Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)));
-  const total_usd = listing.price_usd * guests * nights;
+  const parsed = createBookingSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
 
-  const { data, error } = await supabase
-    .from('bookings')
-    .insert({
-      ...parsed.data,
-      tourist_id: user.id,
-      total_usd,
-      status: 'pending',
-    })
-    .select()
-    .single();
+  const {
+    listing_id,
+    check_in,
+    check_out,
+    guest_name,
+    guest_email,
+    guest_phone,
+    special_requests,
+    notes,
+    payment_method,
+  } = parsed.data;
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data }, { status: 201 });
+  const guest_count = parsed.data.guest_count ?? parsed.data.guests ?? 1;
+
+  // Look up listing for price + capacity info
+  const listings = getListings();
+  const listing = listings.find(
+    (l) =>
+      l.id === listing_id ||
+      (l as { slug?: string }).slug === listing_id
+  ) as {
+    id?: string;
+    name?: string;
+    title?: string;
+    slug?: string;
+    provider_id?: string;
+    price_usd?: number;
+    price?: number;
+    max_guests?: number;
+    min_guests?: number;
+    phone?: string;
+  } | undefined;
+
+  const listing_name = listing?.title ?? listing?.name ?? `Experience ${listing_id}`;
+  const listing_slug = (listing as { slug?: string } | undefined)?.slug;
+  const provider_id = listing?.provider_id;
+  const base_price_usd = listing?.price_usd ?? listing?.price ?? 50;
+  const max_guests = listing?.max_guests ?? 99;
+  const min_guests = listing?.min_guests ?? 1;
+
+  if (guest_count < min_guests || guest_count > max_guests) {
+    return NextResponse.json(
+      { error: `Guest count must be between ${min_guests} and ${max_guests}` },
+      { status: 400 }
+    );
+  }
+
+  const checkIn = new Date(check_in);
+  const checkOut = check_out ? new Date(check_out) : checkIn;
+  const nights = Math.max(
+    1,
+    Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24))
+  );
+
+  const subtotal_usd = Math.round(base_price_usd * guest_count * nights * 100) / 100;
+  const service_fee_usd = Math.round(subtotal_usd * PLATFORM_COMMISSION_RATE * 100) / 100;
+  const total_usd = Math.round((subtotal_usd + service_fee_usd) * 100) / 100;
+  const commission_usd = service_fee_usd;
+  const net_provider_usd = Math.round((total_usd - commission_usd) * 100) / 100;
+
+  const booking = createBooking({
+    listing_id,
+    listing_name,
+    listing_slug,
+    provider_id,
+    guest_name,
+    guest_email,
+    guest_phone,
+    check_in: checkIn.toISOString().split('T')[0],
+    check_out: checkOut.toISOString().split('T')[0],
+    guest_count,
+    base_price_usd,
+    nights,
+    subtotal_usd,
+    service_fee_usd,
+    total_usd,
+    commission_usd,
+    net_provider_usd,
+    status: 'pending',
+    payment_method: payment_method as PaymentMethod,
+    special_requests,
+    notes,
+  });
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3111';
+  let checkout_url: string | null = null;
+  let payment_details: Record<string, string> | null = null;
+
+  if (payment_method === 'card') {
+    try {
+      const session = await createCheckoutSession({
+        bookingId: booking.id,
+        listingTitle: listing_name,
+        amountUsd: total_usd,
+        touristEmail: guest_email,
+        successUrl: `${appUrl}/booking/confirmation?id=${booking.id}`,
+        cancelUrl: listing_slug ? `${appUrl}/listing/${listing_slug}` : `${appUrl}/`,
+        metadata: { bookingId: booking.id },
+      });
+      checkout_url = session.url;
+
+      // Store session ID on booking
+      const { updateBookingStatus } = await import('@/lib/bookings-store');
+      updateBookingStatus(booking.id, 'pending', {
+        stripe_checkout_session_id: session.id,
+      });
+    } catch (err) {
+      console.error('Stripe checkout creation failed:', err);
+      // Don't fail the booking — tourist can retry payment from confirmation page
+    }
+  } else if (payment_method === 'zelle') {
+    payment_details = {
+      method: 'Zelle',
+      email: process.env.PAYMENT_ZELLE_EMAIL || 'payments@vz-tourism.com',
+      name: process.env.PAYMENT_ZELLE_NAME || 'VZ Tourism Platform',
+      amount: `$${total_usd.toFixed(2)} USD`,
+      reference: booking.confirmation_code,
+      instructions: `Send exactly $${total_usd.toFixed(2)} via Zelle to the email above. Use your booking code "${booking.confirmation_code}" as the memo. Your booking will be confirmed once payment is verified.`,
+    };
+  } else if (payment_method === 'usdt') {
+    payment_details = {
+      method: 'USDT (TRC-20)',
+      address: process.env.PAYMENT_USDT_ADDRESS || 'TRx9vZtourismPlatformAddressHere',
+      network: process.env.PAYMENT_USDT_NETWORK || 'TRC-20',
+      amount: `${total_usd.toFixed(2)} USDT`,
+      reference: booking.confirmation_code,
+      instructions: `Send exactly ${total_usd.toFixed(2)} USDT on the TRC-20 network to the address above. Your booking code is "${booking.confirmation_code}". Screenshot your transfer and contact us on WhatsApp to confirm.`,
+    };
+  } else if (payment_method === 'arrival') {
+    payment_details = {
+      method: 'Pay on Arrival',
+      amount: `$${total_usd.toFixed(2)} USD`,
+      reference: booking.confirmation_code,
+      instructions: `Your booking is reserved. Pay $${total_usd.toFixed(2)} in cash on arrival. Show your booking code "${booking.confirmation_code}" to the provider.`,
+    };
+  }
+
+  return NextResponse.json(
+    {
+      data: booking,
+      checkout_url,
+      payment_details,
+      confirmation_code: booking.confirmation_code,
+    },
+    { status: 201 }
+  );
 }

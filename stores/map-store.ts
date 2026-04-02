@@ -15,6 +15,7 @@ interface MapState {
   showSafetyZones: boolean;
   is3DTerrain: boolean;
   isDarkMode: boolean;
+  hiddenCategories: Set<string>;
 }
 
 interface MapActions {
@@ -31,6 +32,7 @@ interface MapActions {
   clearRoutes: () => void;
   toggle3DTerrain: () => void;
   toggleDarkMode: () => void;
+  toggleCategory: (category: string) => void;
 }
 
 type MapStore = MapState & MapActions;
@@ -49,6 +51,7 @@ export const useMapStore = create<MapStore>()(
       showSafetyZones: false,
       is3DTerrain: false,
       isDarkMode: false,
+      hiddenCategories: new Set<string>(),
 
       // Actions
       setCenter: (center) => set({ center }),
@@ -94,6 +97,14 @@ export const useMapStore = create<MapStore>()(
 
       toggleDarkMode: () =>
         set((state) => ({ isDarkMode: !state.isDarkMode })),
+
+      toggleCategory: (category) =>
+        set((state) => {
+          const next = new Set(state.hiddenCategories);
+          if (next.has(category)) next.delete(category);
+          else next.add(category);
+          return { hiddenCategories: next };
+        }),
     }),
     { name: 'map-store' }
   )

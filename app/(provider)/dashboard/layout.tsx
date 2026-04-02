@@ -4,6 +4,8 @@ import { ProviderSidebar } from '@/components/provider/ProviderSidebar';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
+  if (!supabase) redirect('/login?redirectTo=/dashboard');
+
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) redirect('/login?redirectTo=/dashboard');

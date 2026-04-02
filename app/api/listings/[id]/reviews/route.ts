@@ -7,6 +7,7 @@ interface Params { params: Promise<{ id: string }> }
 export async function GET(_: NextRequest, { params }: Params) {
   const { id } = await params;
   const supabase = await createClient();
+  if (!supabase) return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
 
   const { data, error } = await supabase
     .from('reviews')
@@ -21,6 +22,7 @@ export async function GET(_: NextRequest, { params }: Params) {
 export async function POST(request: NextRequest, { params }: Params) {
   const { id } = await params;
   const supabase = await createClient();
+  if (!supabase) return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

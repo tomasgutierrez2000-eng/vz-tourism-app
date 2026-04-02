@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useMapStore } from '@/stores/map-store';
 import { PinPreviewCard } from './PinPreviewCard';
+import { MapLegend } from './MapLegend';
 import { MapControls } from './MapControls';
 import type { MapPin } from '@/types/map';
 import { getCategoryColor } from '@/lib/mapbox/helpers';
@@ -15,6 +16,75 @@ interface MapContainerProps {
   onPinClick?: (pin: MapPin) => void;
 }
 
+type MapboxMap = {
+  on: (event: string, layerOrCb: string | (() => void), cb?: (e: MapboxEvent) => void) => void;
+  off: (event: string, layerOrCb: string | (() => void), cb?: (e: MapboxEvent) => void) => void;
+  addControl: (ctrl: unknown, pos?: string) => void;
+  addSource: (id: string, opts: unknown) => void;
+  getSource: (id: string) => MapboxSource | undefined;
+  addLayer: (opts: unknown) => void;
+  getLayer: (id: string) => unknown;
+  removeLayer: (id: string) => void;
+  removeSource: (id: string) => void;
+  flyTo: (opts: unknown) => void;
+  easeTo: (opts: unknown) => void;
+  setStyle: (style: string) => void;
+  getCanvas: () => HTMLCanvasElement;
+  remove: () => void;
+  queryRenderedFeatures: (point: unknown, opts: unknown) => MapboxFeature[];
+};
+
+type MapboxSource = {
+  setData: (data: unknown) => void;
+  getClusterExpansionZoom: (clusterId: number, cb: (err: Error | null, zoom: number) => void) => void;
+};
+
+type MapboxEvent = {
+  lngLat: { lng: number; lat: number };
+  features?: MapboxFeature[];
+  point: unknown;
+};
+
+type MapboxFeature = {
+  geometry: { coordinates: [number, number] };
+  properties: Record<string, unknown>;
+};
+
+type MapboxPopup = {
+  setLngLat: (coords: [number, number]) => MapboxPopup;
+  setHTML: (html: string) => MapboxPopup;
+  addTo: (map: unknown) => MapboxPopup;
+  remove: () => void;
+};
+
+const SOURCE_ID = 'listings-source';
+const CLUSTER_LAYER = 'clusters';
+const CLUSTER_COUNT_LAYER = 'cluster-count';
+const POINT_LAYER = 'unclustered-point';
+
+function buildGeoJSON(pins: MapPin[], hiddenCategories: Set<string>) {
+  return {
+    type: 'FeatureCollection',
+    features: pins
+      .filter((pin) => !hiddenCategories.has(pin.category ?? 'other'))
+      .map((pin) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [pin.lng, pin.lat] },
+        properties: {
+          id: pin.id,
+          title: pin.title,
+          category: pin.category ?? 'other',
+          rating: pin.rating ?? null,
+          reviewCount: pin.reviewCount ?? 0,
+          city: pin.city ?? '',
+          region: pin.region ?? '',
+          listingId: pin.listingId ?? null,
+          pinJson: JSON.stringify(pin),
+        },
+      })),
+  };
+}
+
 export function MapContainer({
   className = 'w-full h-full',
   interactive = true,
@@ -22,8 +92,8 @@ export function MapContainer({
   onPinClick,
 }: MapContainerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<unknown>(null);
-  const markersRef = useRef<Map<string, unknown>>(new Map());
+  const mapInstanceRef = useRef<MapboxMap | null>(null);
+  const tooltipRef = useRef<MapboxPopup | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [selectedPin, setSelectedPin] = useState<MapPin | null>(null);
 
@@ -33,8 +103,7 @@ export function MapContainer({
     pins,
     isDarkMode,
     is3DTerrain,
-    showSafetyZones,
-    safetyZones,
+    hiddenCategories,
     setSelectedPin: storeSetSelectedPin,
   } = useMapStore();
 
@@ -47,6 +116,154 @@ export function MapContainer({
     [storeSetSelectedPin, onPinClick]
   );
 
+  // Add source + layers to the map (called after map load and after style changes)
+  const addListingsLayers = useCallback(
+    async (map: MapboxMap) => {
+      // Guard against duplicate adds (styledata fires multiple times)
+      if (map.getSource(SOURCE_ID)) return;
+
+      const mapboxgl = (await import('mapbox-gl')).default;
+
+      // GeoJSON source with clustering
+      map.addSource(SOURCE_ID, {
+        type: 'geojson',
+        data: buildGeoJSON(pins, hiddenCategories),
+        cluster: true,
+        clusterMaxZoom: 10,
+        clusterRadius: 50,
+      });
+
+      // Cluster bubbles
+      map.addLayer({
+        id: CLUSTER_LAYER,
+        type: 'circle',
+        source: SOURCE_ID,
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': [
+            'step',
+            ['get', 'point_count'],
+            '#60A5FA',
+            50,
+            '#3B82F6',
+            200,
+            '#1D4ED8',
+          ],
+          'circle-radius': ['step', ['get', 'point_count'], 18, 50, 24, 200, 32],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.9,
+        },
+      });
+
+      // Cluster count label
+      map.addLayer({
+        id: CLUSTER_COUNT_LAYER,
+        type: 'symbol',
+        source: SOURCE_ID,
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': '{point_count_abbreviated}',
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size': 12,
+        },
+        paint: { 'text-color': '#ffffff' },
+      });
+
+      // Individual pins
+      map.addLayer({
+        id: POINT_LAYER,
+        type: 'circle',
+        source: SOURCE_ID,
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-color': [
+            'match',
+            ['get', 'category'],
+            'hotel', '#3B82F6',
+            'restaurant', '#F97316',
+            'experience', '#22C55E',
+            /* default */ '#6B7280',
+          ],
+          'circle-radius': 6,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.9,
+        },
+      });
+
+      // Hover tooltip
+      const Popup = (mapboxgl as { Popup: new (opts: unknown) => MapboxPopup }).Popup;
+      tooltipRef.current = new Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 10,
+        className: 'map-tooltip',
+      });
+
+      // Click: cluster → zoom in
+      map.on('click', CLUSTER_LAYER, (e) => {
+        if (!e.features?.length) return;
+        const clusterId = e.features[0].properties['cluster_id'] as number;
+        const source = map.getSource(SOURCE_ID);
+        if (!source) return;
+        source.getClusterExpansionZoom(clusterId, (err, zoomLevel) => {
+          if (err) return;
+          map.easeTo({ center: e.features![0].geometry.coordinates, zoom: zoomLevel });
+        });
+      });
+
+      // Click: individual point → preview card
+      map.on('click', POINT_LAYER, (e) => {
+        if (!e.features?.length) return;
+        const raw = e.features[0].properties['pinJson'] as string;
+        try {
+          const pin = JSON.parse(raw) as MapPin;
+          handlePinClick(pin);
+        } catch {
+          // ignore
+        }
+      });
+
+      // Cursor changes
+      map.on('mouseenter', CLUSTER_LAYER, () => {
+        map.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', CLUSTER_LAYER, () => {
+        map.getCanvas().style.cursor = '';
+      });
+
+      // Hover tooltip on individual pins
+      map.on('mouseenter', POINT_LAYER, (e) => {
+        map.getCanvas().style.cursor = 'pointer';
+        if (!e.features?.length || !tooltipRef.current) return;
+        const { title, city, region } = e.features[0].properties as {
+          title: string;
+          city: string;
+          region: string;
+        };
+        const subtitle = [city, region].filter(Boolean).join(', ');
+        tooltipRef.current
+          .setLngLat([e.lngLat.lng, e.lngLat.lat])
+          .setHTML(
+            `<div style="font-size:13px;font-weight:600;white-space:nowrap">${title}</div>${
+              subtitle
+                ? `<div style="font-size:11px;color:#6B7280;margin-top:2px">${subtitle}</div>`
+                : ''
+            }`
+          )
+          .addTo(mapInstanceRef.current!);
+      });
+      map.on('mouseleave', POINT_LAYER, () => {
+        map.getCanvas().style.cursor = '';
+        tooltipRef.current?.remove();
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  // Initialize map
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
@@ -56,7 +273,9 @@ export function MapContainer({
       return;
     }
 
-    let map: unknown;
+    let map: MapboxMap;
+    // Track whether the initial load has completed, for styledata re-adds
+    let initialLoadDone = false;
 
     async function initMap() {
       const mapboxgl = (await import('mapbox-gl')).default;
@@ -64,169 +283,81 @@ export function MapContainer({
 
       (mapboxgl as { accessToken: string }).accessToken = token!;
 
-      map = new (mapboxgl as { Map: new (opts: unknown) => unknown }).Map({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      map = new (mapboxgl as unknown as { Map: new (opts: unknown) => MapboxMap }).Map({
         container: mapRef.current!,
         style: isDarkMode
           ? 'mapbox://styles/mapbox/dark-v11'
           : 'mapbox://styles/mapbox/outdoors-v12',
-        center: center,
-        zoom: zoom,
+        center: VENEZUELA_CENTER,
+        zoom: 7,
         bearing: 0,
         pitch: 0,
         interactive,
       });
 
-      const mapInstance = map as {
-        on: (event: string, cb: () => void) => void;
-        addControl: (ctrl: unknown, pos?: string) => void;
-        addSource: (id: string, opts: unknown) => void;
-        addLayer: (opts: unknown) => void;
-        flyTo: (opts: unknown) => void;
-        remove: () => void;
-      };
+      mapInstanceRef.current = map;
 
-      mapInstance.on('load', () => {
-        setMapLoaded(true);
+      map.on('load', async () => {
+        // Add nav controls
+        const NavigationControl = (
+          mapboxgl as { NavigationControl: new () => unknown }
+        ).NavigationControl;
+        map.addControl(new NavigationControl(), 'bottom-right');
 
-        // Add terrain if 3D mode
-        if (is3DTerrain) {
-          mapInstance.addSource('mapbox-dem', {
-            type: 'raster-dem',
-            url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
-            tileSize: 512,
-          });
+        try {
+          await addListingsLayers(map);
+        } catch (err) {
+          console.error('Failed to add map layers on load:', err);
         }
-
-        // Add navigation controls
-        const NavigationControl = (mapboxgl as { NavigationControl: new () => unknown }).NavigationControl;
-        mapInstance.addControl(new NavigationControl(), 'bottom-right');
+        initialLoadDone = true;
+        setMapLoaded(true);
       });
 
-      mapInstanceRef.current = map;
+      // Re-add layers only after style CHANGES (dark mode toggle), not during initial load
+      map.on('styledata', () => {
+        if (!initialLoadDone) return;
+        addListingsLayers(map).catch(console.error);
+      });
     }
 
     initMap().catch(console.error);
 
     return () => {
-      if (map) {
-        (map as { remove: () => void }).remove();
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update map style when dark mode changes
+  // Update dark mode style
   useEffect(() => {
     if (!mapInstanceRef.current || !mapLoaded) return;
-    const mapInstance = mapInstanceRef.current as { setStyle: (s: string) => void };
-    mapInstance.setStyle(
+    mapInstanceRef.current.setStyle(
       isDarkMode
         ? 'mapbox://styles/mapbox/dark-v11'
         : 'mapbox://styles/mapbox/outdoors-v12'
     );
   }, [isDarkMode, mapLoaded]);
 
-  // Update pins/markers
+  // Update GeoJSON data when pins or hidden categories change
   useEffect(() => {
     if (!mapInstanceRef.current || !mapLoaded) return;
+    const source = mapInstanceRef.current.getSource(SOURCE_ID);
+    if (!source) return;
+    source.setData(buildGeoJSON(pins, hiddenCategories));
+  }, [pins, hiddenCategories, mapLoaded]);
 
-    async function updateMarkers() {
-      const mapboxgl = (await import('mapbox-gl')).default;
-      const mapInstance = mapInstanceRef.current as {
-        getCenter: () => { lng: number; lat: number };
-      };
-
-      // Remove old markers
-      markersRef.current.forEach((marker) => {
-        (marker as { remove: () => void }).remove();
-      });
-      markersRef.current.clear();
-
-      // Add new markers
-      pins.forEach((pin) => {
-        const el = document.createElement('div');
-        const color = getCategoryColor(pin.category || '');
-        el.className = 'map-pin-marker cursor-pointer';
-        el.style.cssText = `
-          width: 40px;
-          height: 40px;
-          border-radius: 50% 50% 50% 0;
-          background: ${pin.isSelected ? '#F59E0B' : color};
-          border: 2px solid white;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-          transform: rotate(-45deg);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s ease;
-        `;
-
-        if (pin.price) {
-          const priceEl = document.createElement('div');
-          priceEl.style.cssText = `
-            transform: rotate(45deg);
-            font-size: 10px;
-            font-weight: 700;
-            color: white;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.4);
-          `;
-          priceEl.textContent = `$${pin.price}`;
-          el.appendChild(priceEl);
-        }
-
-        el.addEventListener('click', () => handlePinClick(pin));
-
-        type MarkerInstance = { setLngLat: (coords: [number, number]) => MarkerInstance; addTo: (map: unknown) => MarkerInstance };
-        const Marker = (mapboxgl as { Marker: new (opts: { element: HTMLElement }) => MarkerInstance }).Marker;
-        const marker = new Marker({ element: el })
-          .setLngLat([pin.lng, pin.lat]);
-
-        marker.addTo(mapInstanceRef.current!);
-        markersRef.current.set(pin.id, marker);
-      });
-    }
-
-    updateMarkers().catch(console.error);
-  }, [pins, mapLoaded, handlePinClick]);
-
-  // Auto-fit bounds when pins change
-  useEffect(() => {
-    if (!mapInstanceRef.current || !mapLoaded || pins.length === 0) return;
-
-    async function fitPinBounds() {
-      const mapboxgl = (await import('mapbox-gl')).default;
-
-      if (pins.length === 1) {
-        const mapInstance = mapInstanceRef.current as {
-          flyTo: (opts: { center: [number, number]; zoom: number }) => void;
-        };
-        mapInstance.flyTo({ center: [pins[0].lng, pins[0].lat], zoom: 12 });
-        return;
-      }
-
-      const LngLatBounds = (mapboxgl as { LngLatBounds: new () => unknown }).LngLatBounds;
-      const bounds = new LngLatBounds() as {
-        extend: (coords: [number, number]) => void;
-      };
-      pins.forEach((pin) => bounds.extend([pin.lng, pin.lat]));
-
-      const mapInstance = mapInstanceRef.current as {
-        fitBounds: (bounds: unknown, opts: unknown) => void;
-      };
-      mapInstance.fitBounds(bounds, { padding: 80, maxZoom: 14, duration: 800 });
-    }
-
-    fitPinBounds().catch(console.error);
-  }, [pins, mapLoaded]);
-
-  // Fly to center when it changes
+  // Fly to center when it changes (for search results)
   useEffect(() => {
     if (!mapInstanceRef.current || !mapLoaded) return;
-    const mapInstance = mapInstanceRef.current as {
-      flyTo: (opts: { center: [number, number]; zoom: number }) => void;
-    };
-    mapInstance.flyTo({ center, zoom });
+    // Only fly if it's a search-driven change (not the initial load)
+    const [defaultLng, defaultLat] = VENEZUELA_CENTER;
+    if (center[0] !== defaultLng || center[1] !== defaultLat) {
+      mapInstanceRef.current.flyTo({ center, zoom });
+    }
   }, [center, zoom, mapLoaded]);
 
   return (
@@ -261,8 +392,15 @@ export function MapContainer({
 
       {showControls && mapLoaded && <MapControls />}
 
-      {selectedPin && (
+      {/* Category legend */}
+      {mapLoaded && (
         <div className="absolute bottom-24 left-4 z-10">
+          <MapLegend pins={pins} />
+        </div>
+      )}
+
+      {selectedPin && (
+        <div className="absolute bottom-24 right-4 z-10">
           <PinPreviewCard
             pin={selectedPin}
             onClose={() => {

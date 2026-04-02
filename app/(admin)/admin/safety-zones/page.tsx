@@ -9,6 +9,7 @@ export const metadata: Metadata = { title: 'Admin: Safety Zones' };
 
 export default async function AdminSafetyZonesPage() {
   const supabase = await createClient();
+  if (!supabase) return <div className="p-6 text-muted-foreground">Database not configured.</div>;
   const { data: zones } = await supabase
     .from('safety_zones')
     .select('*')

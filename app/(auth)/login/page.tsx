@@ -32,6 +32,7 @@ function LoginForm() {
     setIsLoading(true);
     try {
       const supabase = createClient();
+      if (!supabase) throw new Error('Authentication is not configured');
       const { error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
@@ -52,6 +53,7 @@ function LoginForm() {
 
   const signInWithGoogle = async () => {
     const supabase = createClient();
+    if (!supabase) { toast.error('Authentication is not configured'); return; }
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${window.location.origin}/auth/callback?next=${redirectTo}` },

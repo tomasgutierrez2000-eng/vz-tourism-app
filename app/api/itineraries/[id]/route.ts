@@ -7,6 +7,7 @@ interface Params { params: Promise<{ id: string }> }
 export async function GET(_: NextRequest, { params }: Params) {
   const { id } = await params;
   const supabase = await createClient();
+  if (!supabase) return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
 
   const { data, error } = await supabase
     .from('itineraries')
@@ -27,6 +28,7 @@ export async function GET(_: NextRequest, { params }: Params) {
 export async function PATCH(request: NextRequest, { params }: Params) {
   const { id } = await params;
   const supabase = await createClient();
+  if (!supabase) return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -53,6 +55,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 export async function DELETE(_: NextRequest, { params }: Params) {
   const { id } = await params;
   const supabase = await createClient();
+  if (!supabase) return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

@@ -11,22 +11,33 @@ export const metadata: Metadata = {
 };
 
 export default async function LibraryPage() {
-  const supabase = await createClient();
+  let featuredListings = null;
+  let recentListings = null;
 
-  const { data: featuredListings } = await supabase
-    .from('listings')
-    .select('*, provider:providers(business_name, is_verified, rating)')
-    .eq('is_published', true)
-    .eq('is_featured', true)
-    .order('rating', { ascending: false })
-    .limit(8);
-
-  const { data: recentListings } = await supabase
-    .from('listings')
-    .select('*, provider:providers(business_name, is_verified)')
-    .eq('is_published', true)
-    .order('created_at', { ascending: false })
-    .limit(12);
+  try {
+    const supabase = await createClient();
+    if (supabase) {
+      const [{ data: featured }, { data: recent }] = await Promise.all([
+        supabase
+          .from('listings')
+          .select('*, provider:providers(business_name, is_verified, rating)')
+          .eq('is_published', true)
+          .eq('is_featured', true)
+          .order('rating', { ascending: false })
+          .limit(8),
+        supabase
+          .from('listings')
+          .select('*, provider:providers(business_name, is_verified)')
+          .eq('is_published', true)
+          .order('created_at', { ascending: false })
+          .limit(12),
+      ]);
+      featuredListings = featured;
+      recentListings = recent;
+    }
+  } catch {
+    // Supabase not configured, show page without DB data
+  }
 
   return (
     <div className="container px-4 py-8 space-y-12">

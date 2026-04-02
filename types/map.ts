@@ -1,4 +1,4 @@
-import type { ListingCategory, SafetyLevel } from './database';
+import type { SafetyLevel } from './database';
 
 export interface Coordinates {
   lat: number;
@@ -12,10 +12,13 @@ export interface MapPin {
   title: string;
   price?: number;
   currency?: string;
-  category?: ListingCategory;
+  category?: string;
   rating?: number;
+  reviewCount?: number;
   imageUrl?: string;
   listingId?: string;
+  city?: string;
+  region?: string;
   isSelected?: boolean;
   isHighlighted?: boolean;
 }

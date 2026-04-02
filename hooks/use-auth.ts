@@ -12,7 +12,15 @@ export function useAuth() {
   const router = useRouter();
 
   useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      setLoading(false);
+      return;
+    }
     const supabase = createClient();
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
 
     const initAuth = async () => {
       try {

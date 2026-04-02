@@ -16,14 +16,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ActivityPage({ params }: Props) {
   const { slug } = await params;
-  const supabase = await createClient();
-
-  const { data: listings } = await supabase
-    .from('listings')
-    .select('*, provider:providers(business_name, is_verified)')
-    .eq('is_published', true)
-    .contains('tags', [slug])
-    .order('rating', { ascending: false });
+  let listings = null;
+  try {
+    const supabase = await createClient();
+    if (supabase) {
+      const { data } = await supabase
+        .from('listings')
+        .select('*, provider:providers(business_name, is_verified)')
+        .eq('is_published', true)
+        .contains('tags', [slug])
+        .order('rating', { ascending: false });
+      listings = data;
+    }
+  } catch {
+    // Supabase not configured
+  }
 
   const title = slug.replace(/-/g, ' ');
 

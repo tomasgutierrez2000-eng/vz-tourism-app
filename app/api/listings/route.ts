@@ -2,40 +2,50 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { listingSchema } from '@/lib/validators';
 import { slugify } from '@/lib/utils';
+import { searchListings, getTotalCount, mapTypeToCategory } from '@/lib/local-listings';
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
   const { searchParams } = new URL(request.url);
 
-  const category = searchParams.get('category');
-  const region = searchParams.get('region');
-  const minPrice = searchParams.get('min_price');
-  const maxPrice = searchParams.get('max_price');
-  const search = searchParams.get('q');
-  const limit = parseInt(searchParams.get('limit') || '20');
+  const type = searchParams.get('type') || undefined;
+  const category = searchParams.get('category') || undefined;
+  const region = searchParams.get('region') || undefined;
+  const search = searchParams.get('q') || '';
+  const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 2000);
   const offset = parseInt(searchParams.get('offset') || '0');
 
-  let query = supabase
-    .from('listings')
-    .select('*, provider:providers(business_name, is_verified)', { count: 'exact' })
-    .eq('is_published', true)
-    .order('rating', { ascending: false })
-    .range(offset, offset + limit - 1);
+  const results = searchListings(search, { region, type, category, limit, offset });
+  const count = getTotalCount(search, { region, type });
 
-  if (category) query = query.eq('category', category);
-  if (region) query = query.eq('region', region);
-  if (minPrice) query = query.gte('price_usd', parseFloat(minPrice));
-  if (maxPrice) query = query.lte('price_usd', parseFloat(maxPrice));
-  if (search) query = query.ilike('title', `%${search}%`);
-
-  const { data, error, count } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const data = results.map((l) => ({
+    id: l.id,
+    title: l.name,
+    name: l.name,
+    slug: l.slug,
+    type: l.type,
+    category: mapTypeToCategory(l.type),
+    description: l.description,
+    latitude: l.latitude,
+    longitude: l.longitude,
+    region: l.region,
+    city: l.city ?? (l.region ?? '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+    address: l.address,
+    rating: l.avg_rating,
+    review_count: l.review_count,
+    phone: l.phone,
+    website: l.website,
+    instagram_handle: l.instagram_handle,
+    google_place_id: l.google_place_id,
+    provider_id: l.provider_id,
+    status: l.status,
+  }));
 
   return NextResponse.json({ data, count, offset, limit });
 }
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
+  if (!supabase) return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

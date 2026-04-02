@@ -15,44 +15,63 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { username } = await params;
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from('creator_profiles')
-    .select('display_name, bio')
-    .eq('username', username)
-    .single();
-  if (!data) return { title: 'Creator Not Found' };
-  return { title: `${data.display_name} — Venezuela Travel Creator`, description: data.bio || undefined };
+  try {
+    const supabase = await createClient();
+    if (!supabase) return { title: 'Creator Not Found' };
+    const { data } = await supabase
+      .from('creator_profiles')
+      .select('display_name, bio')
+      .eq('username', username)
+      .single();
+    if (!data) return { title: 'Creator Not Found' };
+    return { title: `${data.display_name} — Venezuela Travel Creator`, description: data.bio || undefined };
+  } catch {
+    return { title: 'Creator Not Found' };
+  }
 }
 
 export default async function CreatorPage({ params }: Props) {
   const { username } = await params;
-  const supabase = await createClient();
 
-  const { data: creator } = await supabase
-    .from('creator_profiles')
-    .select('*, user:users(full_name, avatar_url, created_at)')
-    .eq('username', username)
-    .single();
+  let creator = null;
+  let itineraries = null;
+  let featuredListings = null;
+
+  try {
+    const supabase = await createClient();
+    if (supabase) {
+      const { data: creatorData } = await supabase
+        .from('creator_profiles')
+        .select('*, user:users(full_name, avatar_url, created_at)')
+        .eq('username', username)
+        .single();
+      creator = creatorData;
+
+      if (creator) {
+        const [{ data: itin }, { data: fl }] = await Promise.all([
+          supabase
+            .from('itineraries')
+            .select('*')
+            .eq('user_id', creator.user_id)
+            .eq('is_public', true)
+            .order('created_at', { ascending: false })
+            .limit(6),
+          supabase
+            .from('listings')
+            .select('*, provider:providers(business_name, is_verified)')
+            .eq('is_published', true)
+            .contains('tags', creator.niche_tags || [])
+            .limit(4),
+        ]);
+        itineraries = itin;
+        featuredListings = fl;
+      }
+    }
+  } catch {
+    // Supabase not configured
+  }
 
   if (!creator) notFound();
-
-  // Get public itineraries by this creator
-  const { data: itineraries } = await supabase
-    .from('itineraries')
-    .select('*')
-    .eq('user_id', creator.user_id)
-    .eq('is_public', true)
-    .order('created_at', { ascending: false })
-    .limit(6);
-
-  // Get featured listings (from itinerary stops)
-  const { data: featuredListings } = await supabase
-    .from('listings')
-    .select('*, provider:providers(business_name, is_verified)')
-    .eq('is_published', true)
-    .contains('tags', creator.niche_tags || [])
-    .limit(4);
 
   return (
     <div className="container px-4 py-8 max-w-4xl mx-auto">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { streamSearch } from '@/lib/claude/client';
+import { searchListings, mapTypeToCategory } from '@/lib/local-listings';
 import type { AISearchRequest } from '@/types/api';
 
 export const runtime = 'nodejs';
@@ -18,7 +19,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'AI search is not configured' }, { status: 503 });
   }
 
-  const supabase = await createServiceClient();
+  let supabase: Awaited<ReturnType<typeof createServiceClient>> | null = null;
+  try {
+    supabase = await createServiceClient();
+  } catch {
+    // Supabase not configured — availability/safety tools will return empty results
+  }
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -30,39 +36,42 @@ export async function POST(request: NextRequest) {
       async function handleToolCall(name: string, input: Record<string, unknown>) {
         switch (name) {
           case 'search_listings': {
-            let q = supabase
-              .from('listings')
-              .select(
-                'id, title, slug, category, price_usd, rating, latitude, longitude, location_name, region, tags, cover_image_url, provider:providers(business_name, is_verified)'
-              )
-              .eq('is_published', true)
-              .limit((input.limit as number) || 10);
+            const searchQuery = (input.query as string) || (input.region as string) || '';
+            const region = (input.region as string) || (filters?.region as string) || undefined;
+            const type = (input.category as string) || (filters?.category as string) || undefined;
+            const limit = (input.limit as number) || 10;
 
-            if (input.category) q = q.eq('category', input.category as string);
-            if (input.region) q = q.eq('region', input.region as string);
-            if (input.min_price) q = q.gte('price_usd', input.min_price as number);
-            if (input.max_price) q = q.lte('price_usd', input.max_price as number);
-            if (filters?.minPrice) q = q.gte('price_usd', filters.minPrice);
-            if (filters?.maxPrice) q = q.lte('price_usd', filters.maxPrice);
-            if (filters?.category) q = q.eq('category', filters.category);
-            if (filters?.region) q = q.eq('region', filters.region);
-            if (input.tags && Array.isArray(input.tags)) q = q.overlaps('tags', input.tags as string[]);
-            if (input.query) q = q.ilike('title', `%${input.query as string}%`);
+            const scraped = searchListings(searchQuery, { region, type, limit });
 
-            const { data } = await q;
-            const listings = data || [];
+            const listings = scraped.map((l) => ({
+              id: l.id,
+              name: l.name,
+              title: l.name,
+              slug: l.slug,
+              type: l.type,
+              category: mapTypeToCategory(l.type),
+              latitude: l.latitude,
+              longitude: l.longitude,
+              rating: l.avg_rating,
+              review_count: l.review_count,
+              region: l.region,
+              address: l.address,
+              phone: l.phone,
+              website: l.website,
+              instagram_handle: l.instagram_handle,
+              description: l.description,
+            }));
 
             // Emit listings to the frontend for map pins
             if (listings.length > 0) {
               emit({ type: 'listings', data: listings });
 
-              // Emit smart follow-up suggestion chips
-              const region = listings[0]?.region || '';
-              const category = listings[0]?.category || '';
+              const firstRegion = listings[0]?.region || '';
+              const firstType = listings[0]?.type || '';
               const suggestions = [
-                `Tell me more about ${region}`,
-                `Best ${category} activities nearby`,
-                `Is it safe to visit ${region}?`,
+                `Tell me more about ${firstRegion}`,
+                `Best ${firstType} places nearby`,
+                `Is it safe to visit ${firstRegion}?`,
                 `What's the best time to go?`,
                 `Add all to my itinerary`,
               ].filter(Boolean);
@@ -73,6 +82,7 @@ export async function POST(request: NextRequest) {
           }
 
           case 'check_availability': {
+            if (!supabase) return { unavailable_dates: [], is_available: true };
             const { listing_id, check_in, check_out } = input as {
               listing_id: string;
               check_in: string;
@@ -89,6 +99,7 @@ export async function POST(request: NextRequest) {
           }
 
           case 'get_safety_info': {
+            if (!supabase) return [];
             const { region } = input as { region: string };
             const { data } = await supabase
               .from('safety_zones')

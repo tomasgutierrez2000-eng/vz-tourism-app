@@ -9,6 +9,7 @@ export const metadata: Metadata = { title: 'Admin: Providers' };
 
 export default async function AdminProvidersPage() {
   const supabase = await createClient();
+  if (!supabase) return <div className="p-6 text-muted-foreground">Database not configured.</div>;
   const { data: providers } = await supabase
     .from('providers')
     .select('*, user:users(full_name, email, avatar_url)')

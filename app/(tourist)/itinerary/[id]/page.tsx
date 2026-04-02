@@ -17,21 +17,34 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data } = await supabase.from('itineraries').select('title, description').eq('id', id).single();
-  if (!data) return { title: 'Itinerary Not Found' };
-  return { title: data.title, description: data.description || undefined };
+  try {
+    const supabase = await createClient();
+    if (!supabase) return { title: 'Itinerary Not Found' };
+    const { data } = await supabase.from('itineraries').select('title, description').eq('id', id).single();
+    if (!data) return { title: 'Itinerary Not Found' };
+    return { title: data.title, description: data.description || undefined };
+  } catch {
+    return { title: 'Itinerary Not Found' };
+  }
 }
 
 export default async function ItineraryPage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
 
-  const { data: itinerary } = await supabase
-    .from('itineraries')
-    .select('*, user:users(id, full_name, avatar_url, role), stops:itinerary_stops(*, listing:listings(title, cover_image_url, slug, price_usd))')
-    .eq('id', id)
-    .single();
+  let itinerary = null;
+  try {
+    const supabase = await createClient();
+    if (supabase) {
+      const { data } = await supabase
+        .from('itineraries')
+        .select('*, user:users(id, full_name, avatar_url, role), stops:itinerary_stops(*, listing:listings(title, cover_image_url, slug, price_usd))')
+        .eq('id', id)
+        .single();
+      itinerary = data;
+    }
+  } catch {
+    // Supabase not configured
+  }
 
   if (!itinerary || !itinerary.is_public) notFound();
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleWebhookEvent } from '@/lib/stripe/server';
-import { createServiceClient } from '@/lib/supabase/server';
+import { updateBookingStatus, updateBookingBySessionId, getBooking } from '@/lib/bookings-store';
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -10,7 +10,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 });
   }
 
-  let event;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let event: { type: string; data: { object: any } };
   try {
     event = await handleWebhookEvent(body, sig);
   } catch (err) {
@@ -18,41 +19,77 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  const supabase = await createServiceClient();
-
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
-        const session = event.data.object as { metadata?: { bookingId?: string } };
-        const bookingId = session.metadata?.bookingId;
+        const session = event.data.object as {
+          id?: string;
+          metadata?: { bookingId?: string; booking_id?: string };
+          payment_intent?: string;
+        };
+        const bookingId = session.metadata?.bookingId || session.metadata?.booking_id;
         if (bookingId) {
-          await supabase
-            .from('bookings')
-            .update({ status: 'confirmed', updated_at: new Date().toISOString() })
-            .eq('id', bookingId);
+          updateBookingStatus(bookingId, 'confirmed', {
+            payment_intent_id: session.payment_intent as string | undefined,
+          });
+        } else if (session.id) {
+          updateBookingBySessionId(session.id, 'confirmed', {
+            payment_intent_id: session.payment_intent as string | undefined,
+          });
         }
         break;
       }
+
       case 'checkout.session.expired': {
-        const session = event.data.object as { metadata?: { bookingId?: string } };
-        const bookingId = session.metadata?.bookingId;
+        const session = event.data.object as {
+          id?: string;
+          metadata?: { bookingId?: string; booking_id?: string };
+        };
+        const bookingId = session.metadata?.bookingId || session.metadata?.booking_id;
         if (bookingId) {
-          await supabase
-            .from('bookings')
-            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-            .eq('id', bookingId)
-            .eq('status', 'pending');
+          const booking = getBooking(bookingId);
+          if (booking?.status === 'pending') {
+            updateBookingStatus(bookingId, 'cancelled');
+          }
+        } else if (session.id) {
+          updateBookingBySessionId(session.id, 'cancelled');
         }
         break;
       }
-      case 'payment_intent.payment_failed': {
-        const pi = event.data.object as { metadata?: { bookingId?: string } };
-        const bookingId = pi.metadata?.bookingId;
+
+      case 'payment_intent.succeeded': {
+        const pi = event.data.object as {
+          id?: string;
+          metadata?: { bookingId?: string; booking_id?: string };
+        };
+        const bookingId = pi.metadata?.bookingId || pi.metadata?.booking_id;
         if (bookingId) {
-          await supabase
-            .from('bookings')
-            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-            .eq('id', bookingId);
+          updateBookingStatus(bookingId, 'confirmed', {
+            payment_intent_id: pi.id,
+          });
+        }
+        break;
+      }
+
+      case 'payment_intent.payment_failed': {
+        const pi = event.data.object as {
+          metadata?: { bookingId?: string; booking_id?: string };
+        };
+        const bookingId = pi.metadata?.bookingId || pi.metadata?.booking_id;
+        if (bookingId) {
+          updateBookingStatus(bookingId, 'cancelled');
+        }
+        break;
+      }
+
+      case 'charge.refunded': {
+        const charge = event.data.object as {
+          metadata?: { bookingId?: string; booking_id?: string };
+          payment_intent?: string;
+        };
+        const bookingId = charge.metadata?.bookingId || charge.metadata?.booking_id;
+        if (bookingId) {
+          updateBookingStatus(bookingId, 'cancelled');
         }
         break;
       }

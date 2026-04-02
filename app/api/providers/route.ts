@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
+  if (!supabase) return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
   const { searchParams } = new URL(request.url);
   const verified = searchParams.get('verified');
   const limit = parseInt(searchParams.get('limit') || '20');

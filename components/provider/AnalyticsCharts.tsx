@@ -5,12 +5,11 @@ import {
   Line,
   BarChart,
   Bar,
+  AreaChart,
+  Area,
   PieChart,
   Pie,
   Cell,
-  FunnelChart,
-  Funnel,
-  LabelList,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -21,63 +20,70 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface RevenueDataPoint {
-  month: string;
+  date: string;
   revenue: number;
-}
-
-interface OccupancyDataPoint {
-  listing: string;
-  bookings: number;
 }
 
 interface FunnelDataPoint {
   name: string;
   value: number;
-  fill: string;
 }
 
-interface TrafficDataPoint {
+interface PaymentMethodDataPoint {
   name: string;
   value: number;
 }
 
-interface AnalyticsChartsProps {
-  revenueData: RevenueDataPoint[];
-  occupancyData: OccupancyDataPoint[];
-  funnelData: FunnelDataPoint[];
-  trafficData: TrafficDataPoint[];
+interface OccupancyDataPoint {
+  week: string;
+  occupancy: number;
 }
 
-const TRAFFIC_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+interface BookingsByListingPoint {
+  listing: string;
+  bookings: number;
+}
+
+export interface AnalyticsChartsProps {
+  revenueData: RevenueDataPoint[];
+  funnelData: FunnelDataPoint[];
+  paymentMethodData: PaymentMethodDataPoint[];
+  occupancyData: OccupancyDataPoint[];
+  bookingsByListing: BookingsByListingPoint[];
+}
+
+const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+const FUNNEL_COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B'];
 
 export function AnalyticsCharts({
   revenueData,
-  occupancyData,
   funnelData,
-  trafficData,
+  paymentMethodData,
+  occupancyData,
+  bookingsByListing,
 }: AnalyticsChartsProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Revenue trend */}
-      <Card>
+      <Card className="lg:col-span-2">
         <CardHeader>
-          <CardTitle className="text-base">Revenue Trend</CardTitle>
+          <CardTitle className="text-base">Revenue Trend — Last 30 Days</CardTitle>
         </CardHeader>
         <CardContent>
-          {revenueData.length > 0 ? (
+          {revenueData.some((d) => d.revenue > 0) ? (
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={revenueData}>
+              <LineChart data={revenueData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
-                <Tooltip formatter={(value) => [`$${Number(value).toFixed(0)}`, 'Revenue']} />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={4} tickLine={false} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v}`} tickLine={false} axisLine={false} />
+                <Tooltip formatter={(value) => [`$${(value as number).toFixed(2)}`, 'Revenue']} />
                 <Line
                   type="monotone"
                   dataKey="revenue"
                   stroke="#3B82F6"
                   strokeWidth={2}
-                  dot={{ r: 4 }}
-                  activeDot={{ r: 6 }}
+                  dot={false}
+                  activeDot={{ r: 5 }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -89,31 +95,7 @@ export function AnalyticsCharts({
         </CardContent>
       </Card>
 
-      {/* Booking occupancy by listing */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Bookings by Listing</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {occupancyData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={occupancyData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis dataKey="listing" type="category" tick={{ fontSize: 10 }} width={90} />
-                <Tooltip />
-                <Bar dataKey="bookings" fill="#10B981" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">
-              No booking data yet
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Conversion funnel */}
+      {/* Booking conversion funnel */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Booking Conversion Funnel</CardTitle>
@@ -121,15 +103,18 @@ export function AnalyticsCharts({
         <CardContent>
           {funnelData.some((d) => d.value > 0) ? (
             <ResponsiveContainer width="100%" height={200}>
-              <FunnelChart>
+              <BarChart data={funnelData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} />
+                <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
                 <Tooltip />
-                <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                  <LabelList position="center" fill="#fff" stroke="none" dataKey="name" style={{ fontSize: 11 }} />
+                {funnelData.map((_, i) => null)}
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                   {funnelData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                    <Cell key={`cell-${index}`} fill={FUNNEL_COLORS[index % FUNNEL_COLORS.length]} />
                   ))}
-                </Funnel>
-              </FunnelChart>
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           ) : (
             <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">
@@ -139,36 +124,97 @@ export function AnalyticsCharts({
         </CardContent>
       </Card>
 
-      {/* Traffic sources */}
+      {/* Bookings by payment method */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Booking Sources</CardTitle>
+          <CardTitle className="text-base">Bookings by Payment Method</CardTitle>
         </CardHeader>
         <CardContent>
-          {trafficData.some((d) => d.value > 0) ? (
+          {paymentMethodData.some((d) => d.value > 0) ? (
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
                 <Pie
-                  data={trafficData}
+                  data={paymentMethodData}
                   cx="50%"
                   cy="50%"
-                  outerRadius={80}
+                  outerRadius={75}
                   dataKey="value"
                   label={({ name, percent }) =>
                     `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
                   }
                   labelLine={false}
                 >
-                  {trafficData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={TRAFFIC_COLORS[index % TRAFFIC_COLORS.length]} />
+                  {paymentMethodData.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip formatter={(value) => [value as number, 'Bookings']} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
             <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">
-              No source data yet
+              No payment data yet
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Occupancy rate trend */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Occupancy Rate by Week</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {occupancyData.some((d) => d.occupancy > 0) ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={occupancyData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                <XAxis dataKey="week" tick={{ fontSize: 10 }} tickLine={false} />
+                <YAxis
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={(v) => `${v}%`}
+                  domain={[0, 100]}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip formatter={(value) => [`${(value as number).toFixed(0)}%`, 'Occupancy']} />
+                <Area
+                  type="monotone"
+                  dataKey="occupancy"
+                  stroke="#10B981"
+                  fill="#10B981"
+                  fillOpacity={0.2}
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">
+              No occupancy data yet
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Bookings by listing */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Bookings by Listing</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {bookingsByListing.some((d) => d.bookings > 0) ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={bookingsByListing} layout="vertical" margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                <XAxis type="number" tick={{ fontSize: 10 }} tickLine={false} allowDecimals={false} />
+                <YAxis dataKey="listing" type="category" tick={{ fontSize: 10 }} width={90} tickLine={false} axisLine={false} />
+                <Tooltip />
+                <Bar dataKey="bookings" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">
+              No booking data yet
             </div>
           )}
         </CardContent>
