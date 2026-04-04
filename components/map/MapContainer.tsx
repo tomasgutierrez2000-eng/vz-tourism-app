@@ -412,7 +412,7 @@ export function MapContainer({
         </div>
       )}
 
-      {!process.env.NEXT_PUBLIC_MAPBOX_TOKEN && (
+      {process.env.NODE_ENV !== 'production' && !process.env.NEXT_PUBLIC_MAPBOX_TOKEN && (
         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-sky-100 to-blue-200 dark:from-sky-900 dark:to-blue-900">
           <div className="text-center space-y-2 p-6">
             <div className="text-4xl">🗺️</div>

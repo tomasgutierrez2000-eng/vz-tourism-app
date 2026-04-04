@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { ListingDetail } from '@/components/listing/ListingDetail';
 import { ScrapedListingView } from '@/components/listing/ScrapedListingView';
+import { RecentlyViewedTracker } from '@/components/listing/RecentlyViewedTracker';
 import { createClient } from '@/lib/supabase/server';
 import { getListingBySlug, mapTypeToCategory, isOnboarded } from '@/lib/local-listings';
 import type { Listing, Review } from '@/types/database';
@@ -73,10 +74,13 @@ export default async function ListingPage({ params }: Props) {
       void supabase.rpc('increment_listing_views', { listing_id: supabaseListing.id });
 
       return (
-        <ListingDetail
-          listing={supabaseListing as Listing}
-          reviews={(reviews || []) as Review[]}
-        />
+        <>
+          <RecentlyViewedTracker listingId={supabaseListing.id} />
+          <ListingDetail
+            listing={supabaseListing as Listing}
+            reviews={(reviews || []) as Review[]}
+          />
+        </>
       );
     }
   } catch {
@@ -130,5 +134,10 @@ export default async function ListingPage({ params }: Props) {
     updated_at: scraped.updated_at || new Date().toISOString(),
   };
 
-  return <ListingDetail listing={listing} reviews={[]} />;
+  return (
+    <>
+      <RecentlyViewedTracker listingId={listing.id} />
+      <ListingDetail listing={listing} reviews={[]} />
+    </>
+  );
 }

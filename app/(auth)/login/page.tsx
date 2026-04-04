@@ -54,10 +54,16 @@ function LoginForm() {
   const signInWithGoogle = async () => {
     const supabase = createClient();
     if (!supabase) { toast.error('Authentication is not configured'); return; }
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${redirectTo}` },
-    });
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/auth/callback?next=${redirectTo}` },
+      });
+      if (error) throw error;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Google sign-in failed';
+      toast.error(message);
+    }
   };
 
   return (
