@@ -20,13 +20,15 @@ function getServiceClient() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Map our LocalBooking fields to the Supabase bookings schema */
 function toSupabaseRow(booking: LocalBooking, touristId?: string | null) {
   return {
     id: booking.id,
-    listing_id: booking.listing_id,
+    listing_id: UUID_RE.test(booking.listing_id) ? booking.listing_id : null,
     tourist_id: touristId ?? null,
-    provider_id: booking.provider_id ?? null,
+    provider_id: booking.provider_id && UUID_RE.test(booking.provider_id) ? booking.provider_id : null,
     status: booking.status,
     check_in: booking.check_in,
     check_out: booking.check_out,
@@ -41,6 +43,20 @@ function toSupabaseRow(booking: LocalBooking, touristId?: string | null) {
   };
 }
 
+/** Resolve a listing ID to a UUID. If already a UUID, returns it. Otherwise looks up by slug. */
+async function resolveListingUuid(
+  supabase: ReturnType<typeof createClient>,
+  listingId: string
+): Promise<string | null> {
+  if (UUID_RE.test(listingId)) return listingId;
+  const { data } = await supabase
+    .from('listings')
+    .select('id')
+    .eq('slug', listingId)
+    .single();
+  return data?.id ?? null;
+}
+
 /** Insert a new booking into Supabase. Returns true on success. */
 export async function insertBooking(
   booking: LocalBooking,
@@ -49,7 +65,19 @@ export async function insertBooking(
   const supabase = getServiceClient();
   if (!supabase) return false;
 
-  const { error } = await supabase.from('bookings').insert(toSupabaseRow(booking, touristId));
+  // tourist_id is NOT NULL in the schema — skip DB insert for guest checkouts
+  if (!touristId) {
+    return false;
+  }
+
+  const listingUuid = await resolveListingUuid(supabase, booking.listing_id);
+  if (!listingUuid) {
+    console.warn('[supabase:bookings] listing not found in DB, skipping insert:', booking.listing_id);
+    return false;
+  }
+
+  const row = { ...toSupabaseRow(booking, touristId), listing_id: listingUuid };
+  const { error } = await supabase.from('bookings').insert(row);
   if (error) {
     console.error('[supabase:bookings] insert error:', error.message);
     return false;

@@ -2,10 +2,17 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "zealous-swanson",
-      "runtimeExecutable": "node_modules/.bin/next",
-      "runtimeArgs": ["dev", "--port", "3111", "/private/tmp/vz-tourism-app/.claude/worktrees/zealous-swanson"],
-      "port": 3111
+      "name": "vz-tourism-app",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "PATH=/tmp/nodebin:/Users/tomas/.nvm/versions/node/v24.12.0/bin:/usr/local/bin:/usr/bin:/bin",
+        "/Users/tomas/.nvm/versions/node/v24.12.0/bin/node",
+        "/Users/tomas/vz-tourism-app/node_modules/.bin/next",
+        "dev",
+        "--webpack",
+        "--port", "3000"
+      ],
+      "port": 3000
     }
   ]
 }

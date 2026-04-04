@@ -10,6 +10,7 @@ import {
 import { PLATFORM_COMMISSION_RATE } from '@/lib/constants';
 import { createCheckoutSession } from '@/lib/stripe/server';
 import { insertBooking, updateBookingInSupabase } from '@/lib/supabase/bookings';
+import { createClient } from '@/lib/supabase/server';
 
 /**
  * Estimates a nightly/per-person price for a listing based on type and rating.
@@ -179,8 +180,14 @@ export async function POST(request: NextRequest) {
     notes,
   });
 
-  // Write to Supabase (primary) — JSON file already written above as fallback
-  await insertBooking(booking);
+  // Write to Supabase — get authenticated user ID if available
+  const supabaseClient = await createClient();
+  let touristId: string | null = null;
+  if (supabaseClient) {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    touristId = user?.id ?? null;
+  }
+  await insertBooking(booking, touristId);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3111';
   let checkout_url: string | null = null;
