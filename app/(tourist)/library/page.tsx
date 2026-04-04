@@ -50,7 +50,7 @@ const CATEGORY_CARDS = [
     value: 'wellness',
     label: 'Wellness',
     description: 'Spa, yoga, and relaxation',
-    image: 'https://images.unsplash.com/photo-1540555700478-4be289fbec6d?w=600&h=400&fit=crop',
+    image: 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=600&h=400&fit=crop',
   },
   {
     value: 'cultural',
