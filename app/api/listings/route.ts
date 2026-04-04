@@ -210,7 +210,7 @@ export async function GET(request: NextRequest) {
           provider_id: l.provider_id as string | null,
           status: (l.is_published as boolean) ? 'published' : 'draft',
           platform_status: l.platform_status as string || 'scraped',
-        })) as ReturnType<typeof searchListings>;
+        })) as unknown as ReturnType<typeof searchListings>;
         useSupabaseSource = true;
       }
     }
