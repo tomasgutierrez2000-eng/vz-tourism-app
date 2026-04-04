@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/use-auth';
 import { useRecentlyViewed } from '@/hooks/use-recently-viewed';
+import { createClient } from '@/lib/supabase/client';
 import { differenceInDays, isPast, isFuture, parseISO, format, formatDistanceToNow } from 'date-fns';
 import { Luggage, MapPin, Calendar, Star, Heart, Cloud, BookOpen, Pencil, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +36,7 @@ interface SavedItinerary {
 interface SavedPlace {
   id: string;
   title: string;
+  slug?: string;
   location_name?: string;
   cover_image_url?: string | null;
   price_usd?: number;
@@ -154,29 +156,50 @@ export default function TripsPage() {
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [itineraries, setItineraries] = useState<SavedItinerary[]>([]);
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
+  const [savedLoading, setSavedLoading] = useState(true);
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.push('/login');
   }, [loading, isAuthenticated, router]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !user) return;
+
     fetch('/api/bookings/mine')
       .then((r) => r.json())
       .then((d) => setBookings(d.bookings ?? []))
       .catch(() => {})
       .finally(() => setBookingsLoading(false));
 
-    // Load from localStorage
+    // Load itineraries from localStorage
     try {
       const stored = localStorage.getItem('vz-itineraries');
       if (stored) setItineraries(JSON.parse(stored));
     } catch {}
-    try {
-      const stored = localStorage.getItem('vz-saved-places');
-      if (stored) setSavedPlaces(JSON.parse(stored));
-    } catch {}
-  }, [isAuthenticated]);
+
+    // Load saved places from Supabase favorites
+    const supabase = createClient();
+    if (supabase) {
+      (async () => {
+        try {
+          const { data } = await supabase
+            .from('favorites')
+            .select('listing_id, listings(id, title, slug, location_name, cover_image_url, price_usd)')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+          if (data) {
+            const places = data
+              .map((row: { listing_id: string; listings: unknown }) => row.listings as SavedPlace | null)
+              .filter((p): p is SavedPlace => p !== null);
+            setSavedPlaces(places);
+          }
+        } catch {}
+        setSavedLoading(false);
+      })();
+    } else {
+      setSavedLoading(false);
+    }
+  }, [isAuthenticated, user]);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? user?.email?.split('@')[0] ?? 'there';
 
@@ -285,41 +308,36 @@ export default function TripsPage() {
       )}
 
       {tab === 'saved' && (
-        savedPlaces.length > 0 ? (
+        savedLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[1,2,3,4].map(i => <div key={i} className="h-48 rounded-xl bg-muted animate-pulse" />)}
+          </div>
+        ) : savedPlaces.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {savedPlaces.map((place) => (
-              <Card key={place.id} className="rounded-xl shadow-sm overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="h-32 bg-gradient-to-br from-sky-100 to-amber-100 relative">
-                    {place.cover_image_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={place.cover_image_url} alt={place.title} className="w-full h-full object-cover" />
-                    )}
-                    <button
-                      onClick={() => setSavedPlaces((prev) => {
-                        const next = prev.filter((p) => p.id !== place.id);
-                        localStorage.setItem('vz-saved-places', JSON.stringify(next));
-                        return next;
-                      })}
-                      className="absolute top-2 right-2 bg-white/80 rounded-full p-1 hover:bg-white transition-colors"
-                      aria-label="Remove"
-                    >
-                      <Heart className="w-4 h-4 fill-red-500 text-red-500" />
-                    </button>
-                  </div>
-                  <div className="p-3">
-                    <h3 className="font-semibold text-sm leading-tight">{place.title}</h3>
-                    {place.location_name && (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <MapPin className="w-3 h-3" />{place.location_name}
-                      </p>
-                    )}
-                    {place.price_usd && (
-                      <p className="text-xs font-medium text-sky-600 mt-1">From ${place.price_usd}/night</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              <Link key={place.id} href={place.slug ? `/listing/${place.slug}` : '#'}>
+                <Card className="rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                  <CardContent className="p-0">
+                    <div className="h-32 bg-gradient-to-br from-sky-100 to-amber-100 relative">
+                      {place.cover_image_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={place.cover_image_url} alt={place.title} className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                    <div className="p-3">
+                      <h3 className="font-semibold text-sm leading-tight">{place.title}</h3>
+                      {place.location_name && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-3 h-3" />{place.location_name}
+                        </p>
+                      )}
+                      {place.price_usd && (
+                        <p className="text-xs font-medium text-sky-600 mt-1">From ${place.price_usd}/person</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
             ))}
           </div>
         ) : (
