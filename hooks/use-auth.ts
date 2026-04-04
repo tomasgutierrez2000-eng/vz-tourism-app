@@ -34,10 +34,6 @@ export function useAuth() {
       return;
     }
     const supabase = createClient();
-    if (!supabase) {
-      setLoading(false);
-      return;
-    }
 
     const initAuth = async () => {
       try {

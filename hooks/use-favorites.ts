@@ -18,8 +18,8 @@ export function useFavorites() {
     // Already loaded for this user — skip fetching.
     if (loaded && userId === user.id) return;
 
-    const supabase = createClient();
-    if (!supabase) return;
+    let supabase: ReturnType<typeof createClient>;
+    try { supabase = createClient(); } catch { return; }
 
     supabase
       .from('favorites')
@@ -39,8 +39,8 @@ export function useFavorites() {
     async (listingId: string) => {
       if (!isAuthenticated || !user) return;
 
-      const supabase = createClient();
-      if (!supabase) return;
+      let supabase: ReturnType<typeof createClient>;
+      try { supabase = createClient(); } catch { return; }
 
       const isFav = favorites.includes(listingId);
 

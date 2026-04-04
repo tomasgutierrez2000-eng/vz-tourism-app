@@ -35,8 +35,10 @@ export const useAuthStore = create<AuthStore>()(
 
       signOut: async () => {
         const { createClient } = await import('@/lib/supabase/client');
-        const supabase = createClient();
-        if (supabase) await supabase.auth.signOut();
+        try {
+          const supabase = createClient();
+          await supabase.auth.signOut();
+        } catch {}
         set({ user: null, profile: null });
       },
 
@@ -45,19 +47,18 @@ export const useAuthStore = create<AuthStore>()(
         if (!profile) return;
 
         const { createClient } = await import('@/lib/supabase/client');
-        const supabase = createClient();
-        if (!supabase) return;
-
-        const { data: updated, error } = await supabase
-          .from('users')
-          .update(data)
-          .eq('id', profile.id)
-          .select()
-          .single();
-
-        if (!error && updated) {
-          set({ profile: updated as User });
-        }
+        try {
+          const supabase = createClient();
+          const { data: updated, error } = await supabase
+            .from('users')
+            .update(data)
+            .eq('id', profile.id)
+            .select()
+            .single();
+          if (!error && updated) {
+            set({ profile: updated as User });
+          }
+        } catch {}
       },
     }),
     { name: 'auth-store' }

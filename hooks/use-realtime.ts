@@ -28,8 +28,8 @@ export function useRealtime<T>({
   useEffect(() => {
     if (!enabled) return;
 
-    const supabase = createClient();
-    if (!supabase) return;
+    let supabase: ReturnType<typeof createClient>;
+    try { supabase = createClient(); } catch { return; }
 
     const channelName = `${table}-${filter || 'all'}-${Date.now()}`;
 
