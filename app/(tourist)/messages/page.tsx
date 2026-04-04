@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { format, parseISO } from 'date-fns';
 import { MessageCircle, Calendar } from 'lucide-react';
@@ -30,14 +29,9 @@ function waLink(booking: GuestBooking, message: string): string {
 }
 
 export default function MessagesPage() {
-  const router = useRouter();
-  const { profile, loading, isAuthenticated } = useAuth();
+  const { profile, isAuthenticated } = useAuth();
   const [bookings, setBookings] = useState<GuestBooking[]>([]);
   const [fetching, setFetching] = useState(true);
-
-  useEffect(() => {
-    if (!loading && !isAuthenticated) router.push('/login');
-  }, [loading, isAuthenticated, router]);
 
   useEffect(() => {
     if (!isAuthenticated) return;

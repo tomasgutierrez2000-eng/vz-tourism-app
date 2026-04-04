@@ -11,14 +11,29 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { createClient } from '@/lib/supabase/client';
+import { useAuthStore } from '@/stores/auth-store';
 import { loginSchema, type LoginFormData } from '@/lib/validators';
 import toast from 'react-hot-toast';
+
+const DEMO_USER = {
+  id: 'demo-user-001',
+  email: 'demo@vzexplorer.com',
+  full_name: 'Tomas Demo',
+  avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=tomas',
+  role: 'tourist' as const,
+  phone: null,
+  nationality: 'Venezuela',
+  preferred_language: 'en',
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '/';
   const [isLoading, setIsLoading] = useState(false);
+  const { setUser, setProfile, setLoading, setInitialized } = useAuthStore();
 
   const {
     register,
@@ -60,6 +75,15 @@ function LoginForm() {
     });
   };
 
+  const signInAsDemo = () => {
+    setUser(DEMO_USER);
+    setProfile(DEMO_USER);
+    setLoading(false);
+    setInitialized(true);
+    toast.success('Signed in as Tomas Demo!');
+    router.push(redirectTo);
+  };
+
   return (
     <Card className="shadow-xl border-0">
       <CardHeader className="text-center pb-2">
@@ -83,10 +107,20 @@ function LoginForm() {
           Continue with Google
         </Button>
 
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900"
+          onClick={signInAsDemo}
+        >
+          <span className="mr-2">✨</span>
+          Try Demo Account
+        </Button>
+
         <div className="relative">
           <Separator />
           <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
-            or
+            or sign in with email
           </span>
         </div>
 

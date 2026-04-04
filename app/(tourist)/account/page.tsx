@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -51,17 +50,10 @@ const EMPTY_PROFILE: UserProfile = {
 };
 
 export default function AccountPage() {
-  const router = useRouter();
   const { user, profile, loading, isAuthenticated } = useAuth();
   const [form, setForm] = useState<UserProfile>(EMPTY_PROFILE);
   const [saving, setSaving] = useState(false);
   const [serviceAvailable, setServiceAvailable] = useState(true);
-
-  useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [loading, isAuthenticated, router]);
 
   useEffect(() => {
     if (!isAuthenticated) return;

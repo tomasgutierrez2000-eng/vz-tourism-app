@@ -69,10 +69,6 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   const [showCancelModal, setShowCancelModal] = useState(false);
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) router.push('/login');
-  }, [loading, isAuthenticated, router]);
-
-  useEffect(() => {
     if (!isAuthenticated || !id) return;
     fetch(`/api/bookings/${id}`)
       .then((r) => r.json())

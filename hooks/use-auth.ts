@@ -41,6 +41,15 @@ export function useAuth() {
 
     const initAuth = async () => {
       try {
+        // If a demo user is persisted in the store, skip the Supabase session
+        // check entirely — demo users have no real session to validate.
+        const currentUser = useAuthStore.getState().user;
+        if (currentUser?.id === 'demo-user-001') {
+          setLoading(false);
+          setInitialized(true);
+          return;
+        }
+
         const {
           data: { session },
         } = await supabase.auth.getSession();
@@ -84,6 +93,9 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Don't let Supabase auth events affect a demo user session.
+      if (useAuthStore.getState().user?.id === 'demo-user-001') return;
+
       if (session?.user) {
         const authUser = session.user;
         const minimalUser: User = {

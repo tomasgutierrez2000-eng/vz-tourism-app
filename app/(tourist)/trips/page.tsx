@@ -159,10 +159,6 @@ export default function TripsPage() {
   const [savedLoading, setSavedLoading] = useState(true);
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) router.push('/login');
-  }, [loading, isAuthenticated, router]);
-
-  useEffect(() => {
     if (!isAuthenticated || !user) return;
 
     fetch('/api/bookings/mine')
