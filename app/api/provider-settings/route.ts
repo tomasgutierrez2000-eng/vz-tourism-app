@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { provider_id = 'prov_001', ...rest } = body as Record<string, unknown>; // TODO: derive provider_id from real session
+  const { provider_id = 'prov_001', ...rest } = body as unknown as Record<string, unknown>; // TODO: derive provider_id from real session
   const all = readSettings();
   all[provider_id as string] = {
     ...(all[provider_id as string] || {}),

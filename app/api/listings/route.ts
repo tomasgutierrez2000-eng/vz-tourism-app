@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
         const { data, count, error } = await query;
 
         if (!error && data) {
-          let items = (data as Record<string, unknown>[]).map(mapSupabaseToApiListing);
+          let items = (data as unknown as Record<string, unknown>[]).map(mapSupabaseToApiListing);
 
           if (amenityFilter.length > 0) {
             const withAmenities = items.filter((l) =>
@@ -189,7 +189,7 @@ export async function GET(request: NextRequest) {
       const { data, error } = await query;
       if (!error && data) {
         // Coerce Supabase rows to local listing shape for the availability logic below
-        allMatching = (data as Record<string, unknown>[]).map((l) => ({
+        allMatching = (data as unknown as Record<string, unknown>[]).map((l) => ({
           id: l.id as string,
           name: l.title as string,
           slug: l.slug as string,

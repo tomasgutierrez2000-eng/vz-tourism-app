@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Business not found' }, { status: 404 });
   }
 
-  const body = await req.json() as Record<string, unknown>;
+  const body = await req.json() as unknown as Record<string, unknown>;
   const { action, ...data } = body;
 
   if (action === 'start') {

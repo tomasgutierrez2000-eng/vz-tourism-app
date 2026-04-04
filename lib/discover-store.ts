@@ -91,7 +91,7 @@ function migrateItem(raw: Record<string, unknown>): DiscoverContent {
 function readContent(): DiscoverContent[] {
   try {
     const raw = JSON.parse(fs.readFileSync(CONTENT_FILE, 'utf-8'));
-    return (raw as Record<string, unknown>[]).map(migrateItem);
+    return (raw as unknown as Record<string, unknown>[]).map(migrateItem);
   } catch {
     return [];
   }

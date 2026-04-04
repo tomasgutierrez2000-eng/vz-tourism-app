@@ -124,11 +124,11 @@ function promoteToPlatform(slug: string, session: OnboardingSession): void {
   const listingsFile = path.join(process.cwd(), 'data', 'scraped-listings.json');
   try {
     const raw = fs.readFileSync(listingsFile, 'utf-8');
-    const listings = JSON.parse(raw) as Record<string, unknown>[];
-    const idx = listings.findIndex((l) => (l as { slug: string }).slug === slug);
+    const listings = JSON.parse(raw) as unknown as Record<string, unknown>[];
+    const idx = listings.findIndex((l) => (l as unknown as { slug: string }).slug === slug);
     if (idx === -1) return;
 
-    const listing = listings[idx] as Record<string, unknown>;
+    const listing = listings[idx] as unknown as Record<string, unknown>;
     listing.platform_status = 'founding_partner' as PlatformStatus;
     listing.updated_at = new Date().toISOString();
 

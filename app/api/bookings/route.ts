@@ -51,7 +51,7 @@ function getListings() {
   if (_listings) return _listings;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _listings = require('@/data/scraped-listings.json') as Record<string, unknown>[];
+    _listings = require('@/data/scraped-listings.json') as unknown as Record<string, unknown>[];
   } catch {
     _listings = [];
   }

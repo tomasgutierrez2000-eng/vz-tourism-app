@@ -40,7 +40,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   // Also allow admin to set is_verified
   const updates = parsed.success ? parsed.data : {};
   if (profile?.role === 'admin' && 'is_verified' in body) {
-    (updates as Record<string, unknown>).is_verified = body.is_verified;
+    (updates as unknown as Record<string, unknown>).is_verified = body.is_verified;
   }
 
   const { data, error } = await supabase
