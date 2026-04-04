@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBooking, updateBookingStatus, type BookingStatus } from '@/lib/bookings-store';
+import { updateBookingInSupabase } from '@/lib/supabase/bookings';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -45,6 +46,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (notes !== undefined) updates.notes = notes;
   if (special_requests !== undefined) updates.special_requests = special_requests;
 
-  const updated = updateBookingStatus(id, status ?? booking.status, updates);
+  const newStatus = status ?? booking.status;
+  const updated = updateBookingStatus(id, newStatus, updates);
+
+  // Mirror status update to Supabase
+  await updateBookingInSupabase(id, newStatus);
+
   return NextResponse.json({ data: updated });
 }

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleWebhookEvent } from '@/lib/stripe/server';
 import { updateBookingStatus, updateBookingBySessionId, getBooking } from '@/lib/bookings-store';
+import {
+  updateBookingInSupabase,
+  updateBookingBySessionInSupabase,
+} from '@/lib/supabase/bookings';
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -27,14 +31,17 @@ export async function POST(request: NextRequest) {
           metadata?: { bookingId?: string; booking_id?: string };
           payment_intent?: string;
         };
+        const paymentIntentId = session.payment_intent as string | undefined;
         const bookingId = session.metadata?.bookingId || session.metadata?.booking_id;
         if (bookingId) {
-          updateBookingStatus(bookingId, 'confirmed', {
-            payment_intent_id: session.payment_intent as string | undefined,
+          updateBookingStatus(bookingId, 'confirmed', { payment_intent_id: paymentIntentId });
+          await updateBookingInSupabase(bookingId, 'confirmed', {
+            stripe_payment_intent_id: paymentIntentId,
           });
         } else if (session.id) {
-          updateBookingBySessionId(session.id, 'confirmed', {
-            payment_intent_id: session.payment_intent as string | undefined,
+          updateBookingBySessionId(session.id, 'confirmed', { payment_intent_id: paymentIntentId });
+          await updateBookingBySessionInSupabase(session.id, 'confirmed', {
+            stripe_payment_intent_id: paymentIntentId,
           });
         }
         break;
@@ -50,9 +57,11 @@ export async function POST(request: NextRequest) {
           const booking = getBooking(bookingId);
           if (booking?.status === 'pending') {
             updateBookingStatus(bookingId, 'cancelled');
+            await updateBookingInSupabase(bookingId, 'cancelled');
           }
         } else if (session.id) {
           updateBookingBySessionId(session.id, 'cancelled');
+          await updateBookingBySessionInSupabase(session.id, 'cancelled');
         }
         break;
       }
@@ -64,8 +73,9 @@ export async function POST(request: NextRequest) {
         };
         const bookingId = pi.metadata?.bookingId || pi.metadata?.booking_id;
         if (bookingId) {
-          updateBookingStatus(bookingId, 'confirmed', {
-            payment_intent_id: pi.id,
+          updateBookingStatus(bookingId, 'confirmed', { payment_intent_id: pi.id });
+          await updateBookingInSupabase(bookingId, 'confirmed', {
+            stripe_payment_intent_id: pi.id,
           });
         }
         break;
@@ -78,6 +88,7 @@ export async function POST(request: NextRequest) {
         const bookingId = pi.metadata?.bookingId || pi.metadata?.booking_id;
         if (bookingId) {
           updateBookingStatus(bookingId, 'cancelled');
+          await updateBookingInSupabase(bookingId, 'cancelled');
         }
         break;
       }
@@ -90,6 +101,7 @@ export async function POST(request: NextRequest) {
         const bookingId = charge.metadata?.bookingId || charge.metadata?.booking_id;
         if (bookingId) {
           updateBookingStatus(bookingId, 'cancelled');
+          await updateBookingInSupabase(bookingId, 'cancelled');
         }
         break;
       }

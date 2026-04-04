@@ -4,10 +4,12 @@ import {
   createBooking,
   getAllBookings,
   getBookingsByEmail,
+  updateBookingStatus,
   type PaymentMethod,
 } from '@/lib/bookings-store';
 import { PLATFORM_COMMISSION_RATE } from '@/lib/constants';
 import { createCheckoutSession } from '@/lib/stripe/server';
+import { insertBooking, updateBookingInSupabase } from '@/lib/supabase/bookings';
 
 /**
  * Estimates a nightly/per-person price for a listing based on type and rating.
@@ -177,6 +179,9 @@ export async function POST(request: NextRequest) {
     notes,
   });
 
+  // Write to Supabase (primary) — JSON file already written above as fallback
+  await insertBooking(booking);
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3111';
   let checkout_url: string | null = null;
   let payment_details: Record<string, string> | null = null;
@@ -194,9 +199,11 @@ export async function POST(request: NextRequest) {
       });
       checkout_url = session.url;
 
-      // Store session ID on booking
-      const { updateBookingStatus } = await import('@/lib/bookings-store');
+      // Store session ID on both JSON store and Supabase
       updateBookingStatus(booking.id, 'pending', {
+        stripe_checkout_session_id: session.id,
+      });
+      await updateBookingInSupabase(booking.id, 'pending', {
         stripe_checkout_session_id: session.id,
       });
     } catch (err) {
