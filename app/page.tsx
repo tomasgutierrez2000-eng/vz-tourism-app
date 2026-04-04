@@ -27,7 +27,7 @@ export default function HomePage() {
   const { search, isStreaming, suggestions, isFilterOpen, toggleFilterPanel, hasSearched } =
     useSearch();
   const { isOpen: itineraryOpen, createNew } = useItinerary();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { setPins, hiddenCategories, toggleCategory } = useMapStore();
   const [activeCategory, setActiveCategory] = useState(CATEGORY_FILTER_ALL);
   const [totalCount, setTotalCount] = useState(0);
@@ -165,6 +165,16 @@ export default function HomePage() {
             )}
           </div>
         </div>
+
+        {/* Personalized greeting (authenticated, no active search) */}
+        {isAuthenticated && !hasSearched && (
+          <div className="pointer-events-none absolute top-24 left-4 z-20">
+            <div className="inline-flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded-2xl px-3 py-1.5 shadow-sm border border-gray-100 text-sm text-gray-700">
+              <span>👋</span>
+              <span>Welcome back{user?.full_name ? `, ${user.full_name.split(' ')[0]}` : ''}!</span>
+            </div>
+          </div>
+        )}
 
         {/* AI Response Panel - left side */}
         {hasSearched && (

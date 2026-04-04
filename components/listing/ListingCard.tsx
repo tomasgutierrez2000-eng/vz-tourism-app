@@ -6,6 +6,7 @@ import { Star, Clock, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { SafetyBadge } from '@/components/common/SafetyBadge';
+import { FavoriteButton } from '@/components/listing/FavoriteButton';
 import type { Listing } from '@/types/database';
 import { formatCurrency, formatDuration, truncate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -74,8 +75,9 @@ export function ListingCard({ listing, compact = false, className }: ListingCard
               <Badge className="bg-amber-500 text-white text-xs border-0">Featured</Badge>
             )}
           </div>
-          <div className="absolute top-3 right-3">
+          <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
             <SafetyBadge level={listing.safety_level} size="sm" className="bg-white/90 border-0 shadow-sm" />
+            <FavoriteButton listingId={listing.id} />
           </div>
         </div>
 

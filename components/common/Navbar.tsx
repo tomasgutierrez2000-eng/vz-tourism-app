@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Map, BookOpen, User, LayoutDashboard, Shield, Sparkles, Luggage, Heart, MessageCircle, Calendar } from 'lucide-react';
+import { Map, BookOpen, User, LayoutDashboard, Shield, Sparkles, Luggage, Heart, LogIn } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -94,35 +94,33 @@ export function Navbar() {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => window.location.href = '/account'}>
                     <User className="mr-2 h-4 w-4" />
-                    My Account
+                    My Profile
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => window.location.href = '/trips'}>
                     <Luggage className="mr-2 h-4 w-4" />
-                    My Trips
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => window.location.href = '/trips#bookings'}>
-                    <Calendar className="mr-2 h-4 w-4" />
-                    My Bookings
+                    Trips
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => window.location.href = '/trips#saved'}>
                     <Heart className="mr-2 h-4 w-4" />
-                    Saved Places
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => window.location.href = '/messages'}>
-                    <MessageCircle className="mr-2 h-4 w-4" />
-                    Messages
+                    Saved
                   </DropdownMenuItem>
                   {isProvider && (
-                    <DropdownMenuItem onClick={() => window.location.href = '/dashboard'}>
-                      <LayoutDashboard className="mr-2 h-4 w-4" />
-                      Dashboard
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => window.location.href = '/dashboard'}>
+                        <LayoutDashboard className="mr-2 h-4 w-4" />
+                        Dashboard
+                      </DropdownMenuItem>
+                    </>
                   )}
                   {isAdmin && (
-                    <DropdownMenuItem onClick={() => window.location.href = '/admin'}>
-                      <Shield className="mr-2 h-4 w-4" />
-                      Admin Panel
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => window.location.href = '/admin'}>
+                        <Shield className="mr-2 h-4 w-4" />
+                        Admin Panel
+                      </DropdownMenuItem>
+                    </>
                   )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={signOut} className="text-red-600">
@@ -133,7 +131,10 @@ export function Navbar() {
             </>
           ) : (
             <div className="flex items-center gap-2">
-              <Link href="/login" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>Sign in</Link>
+              <Link href="/login" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+                <LogIn className="w-4 h-4 mr-1.5" />
+                Sign in
+              </Link>
               <Link href="/register" className={buttonVariants({ size: 'sm' })}>Get started</Link>
             </div>
           )}
