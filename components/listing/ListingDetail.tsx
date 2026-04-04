@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { MapPin, Clock, Users, Globe, CheckCircle, XCircle, Star } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +9,7 @@ import { ImageGallery } from '@/components/common/ImageGallery';
 import { SafetyBadge } from '@/components/common/SafetyBadge';
 import { BookingForm } from './BookingForm';
 import { ReviewSection } from './ReviewSection';
+import { useRecentlyViewed } from '@/hooks/use-recently-viewed';
 import type { Listing, Review } from '@/types/database';
 import { formatDuration, pluralize } from '@/lib/utils';
 import { LISTING_CATEGORIES } from '@/lib/constants';
@@ -20,6 +22,20 @@ interface ListingDetailProps {
 }
 
 export function ListingDetail({ listing, reviews, canReview, bookingId }: ListingDetailProps) {
+  const { track } = useRecentlyViewed();
+
+  useEffect(() => {
+    track({
+      id: listing.id,
+      slug: listing.slug,
+      title: listing.title,
+      cover_image_url: listing.cover_image_url,
+      location_name: listing.location_name,
+      price_usd: listing.price_usd,
+      category: listing.category,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listing.id]);
   const category = LISTING_CATEGORIES.find((c) => c.value === listing.category);
   const photos = listing.photos || [];
   const allImages = [

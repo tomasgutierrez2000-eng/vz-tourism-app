@@ -11,11 +11,29 @@ export async function GET(request: Request) {
     if (!supabase) {
       console.error('[Auth] callback: createClient() returned null — check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY');
     } else {
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (!error) {
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      if (!error && data.session) {
+        // Upsert the user row immediately after OAuth so there's no race condition
+        // where the client loads before the DB trigger has created the row.
+        const authUser = data.session.user;
+        await supabase.from('users').upsert(
+          {
+            id: authUser.id,
+            email: authUser.email ?? '',
+            full_name:
+              authUser.user_metadata?.full_name ??
+              authUser.user_metadata?.name ??
+              authUser.email ??
+              '',
+            avatar_url: authUser.user_metadata?.avatar_url ?? null,
+            role: 'tourist',
+            preferred_language: 'en',
+          },
+          { onConflict: 'id', ignoreDuplicates: true }
+        );
         return NextResponse.redirect(`${origin}${next}`);
       }
-      console.error('[Auth] exchangeCodeForSession failed:', error.message, error);
+      console.error('[Auth] exchangeCodeForSession failed:', error?.message, error);
     }
   }
 

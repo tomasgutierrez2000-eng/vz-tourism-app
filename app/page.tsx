@@ -2,8 +2,17 @@
 
 import dynamic from 'next/dynamic';
 import { useState, useEffect } from 'react';
-import { SlidersHorizontal, MapPin, Route } from 'lucide-react';
+import Link from 'next/link';
+import { SlidersHorizontal, MapPin, Route, LogIn, User, Luggage, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { SearchBar } from '@/components/common/SearchBar';
 import { SuggestionChips } from '@/components/search/SuggestionChips';
 import { AIResponsePanel } from '@/components/search/AIResponsePanel';
@@ -14,6 +23,7 @@ import { useItinerary } from '@/hooks/use-itinerary';
 import { useAuth } from '@/hooks/use-auth';
 import { useMapStore } from '@/stores/map-store';
 import { BUSINESS_CATEGORIES } from '@/lib/mapbox/helpers';
+import { getInitials } from '@/lib/utils';
 import type { MapPin as MapPinType } from '@/types/map';
 
 const MapContainer = dynamic(
@@ -27,7 +37,7 @@ export default function HomePage() {
   const { search, isStreaming, suggestions, isFilterOpen, toggleFilterPanel, hasSearched } =
     useSearch();
   const { isOpen: itineraryOpen, createNew } = useItinerary();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, profile, signOut } = useAuth();
   const { setPins, hiddenCategories, toggleCategory } = useMapStore();
   const [activeCategory, setActiveCategory] = useState(CATEGORY_FILTER_ALL);
   const [totalCount, setTotalCount] = useState(0);
@@ -100,6 +110,53 @@ export default function HomePage() {
 
       {/* Floating UI overlay */}
       <div className="absolute inset-0 pointer-events-none">
+        {/* Top-right auth button */}
+        <div className="pointer-events-auto absolute top-4 right-4 z-20">
+          {isAuthenticated ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-primary shadow-lg">
+                <Avatar className="w-10 h-10 border-2 border-white shadow-md">
+                  <AvatarImage src={profile?.avatar_url || undefined} />
+                  <AvatarFallback className="bg-sky-500 text-white text-sm font-medium">
+                    {getInitials(profile?.full_name || user?.full_name || 'U')}
+                  </AvatarFallback>
+                </Avatar>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="px-2 py-1.5">
+                  <p className="text-sm font-medium">{profile?.full_name || user?.full_name}</p>
+                  <p className="text-xs text-muted-foreground">{profile?.email || user?.email}</p>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => window.location.href = '/account'}>
+                  <User className="mr-2 h-4 w-4" />
+                  My Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.location.href = '/trips'}>
+                  <Luggage className="mr-2 h-4 w-4" />
+                  My Trips
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.location.href = '/trips#saved'}>
+                  <Heart className="mr-2 h-4 w-4" />
+                  Saved Places
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={signOut} className="text-red-600">
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center gap-2 bg-white dark:bg-gray-900 shadow-lg border border-gray-200 rounded-2xl px-3 py-2 text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              <LogIn className="w-4 h-4" />
+              Sign in
+            </Link>
+          )}
+        </div>
+
         {/* Top search bar + filter chips */}
         <div className="pointer-events-auto absolute top-4 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-20">
           <div className="space-y-2">

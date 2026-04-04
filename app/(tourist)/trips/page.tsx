@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useAuth } from '@/hooks/use-auth';
-import { differenceInDays, isPast, isFuture, parseISO, format } from 'date-fns';
-import { Luggage, MapPin, Calendar, Star, Heart, Cloud, BookOpen, Pencil } from 'lucide-react';
+import { useRecentlyViewed } from '@/hooks/use-recently-viewed';
+import { differenceInDays, isPast, isFuture, parseISO, format, formatDistanceToNow } from 'date-fns';
+import { Luggage, MapPin, Calendar, Star, Heart, Cloud, BookOpen, Pencil, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -146,6 +148,7 @@ function EmptyState({ tab }: { tab: Tab }) {
 export default function TripsPage() {
   const router = useRouter();
   const { user, profile, loading, isAuthenticated } = useAuth();
+  const { items: recentlyViewed } = useRecentlyViewed();
   const [tab, setTab] = useState<Tab>('upcoming');
   const [bookings, setBookings] = useState<GuestBooking[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
@@ -322,6 +325,53 @@ export default function TripsPage() {
         ) : (
           <EmptyState tab="saved" />
         )
+      )}
+
+      {/* Recently Viewed */}
+      {recentlyViewed.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-muted-foreground" />
+            Recently Viewed
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {recentlyViewed.map((item) => (
+              <Link key={item.id} href={`/listing/${item.slug}`}>
+                <Card className="rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                  <CardContent className="p-0">
+                    <div className="h-28 bg-gradient-to-br from-sky-100 to-amber-100 relative">
+                      {item.cover_image_url && (
+                        <Image
+                          src={item.cover_image_url}
+                          alt={item.title}
+                          fill
+                          className="object-cover"
+                        />
+                      )}
+                      <span className="absolute bottom-2 left-2 text-xs bg-black/50 text-white px-2 py-0.5 rounded-full capitalize">
+                        {item.category}
+                      </span>
+                    </div>
+                    <div className="p-3">
+                      <h3 className="font-semibold text-sm leading-tight line-clamp-1">{item.title}</h3>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />{item.location_name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(item.viewed_at), { addSuffix: true })}
+                        </p>
+                      </div>
+                      {item.price_usd && (
+                        <p className="text-xs font-medium text-sky-600 mt-1">${item.price_usd} / person</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
