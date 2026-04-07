@@ -1,16 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/use-auth';
 import { useRecentlyViewed } from '@/hooks/use-recently-viewed';
+import { useFavorites } from '@/hooks/use-favorites';
 import { createClient } from '@/lib/supabase/client';
 import { differenceInDays, isPast, isFuture, parseISO, format, formatDistanceToNow } from 'date-fns';
-import { Luggage, MapPin, Calendar, Star, Heart, Cloud, BookOpen, Pencil, Clock } from 'lucide-react';
+import {
+  Luggage, MapPin, Calendar, Star, Heart, BookOpen, Pencil, Clock,
+  Plus, Search, ListChecks, ChevronRight, Sparkles, Compass,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+import { GlassCard } from '@/components/common/GlassCard';
+import { AnimatedCounter } from '@/components/common/AnimatedCounter';
 
 interface GuestBooking {
   id: string;
@@ -42,8 +47,6 @@ interface SavedPlace {
   price_usd?: number;
 }
 
-type Tab = 'upcoming' | 'past' | 'itineraries' | 'saved';
-
 const STATUS_COLORS: Record<string, string> = {
   confirmed: 'bg-green-100 text-green-800',
   pending: 'bg-yellow-100 text-yellow-800',
@@ -51,107 +54,102 @@ const STATUS_COLORS: Record<string, string> = {
   completed: 'bg-blue-100 text-blue-800',
 };
 
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 function daysUntil(dateStr: string) {
   return differenceInDays(parseISO(dateStr), new Date());
 }
 
-function BookingCard({ booking, past }: { booking: GuestBooking; past?: boolean }) {
-  const days = past ? null : daysUntil(booking.check_in);
-  const withinWeek = days !== null && days <= 7 && days >= 0;
+// Countdown component with flip-digit animation
+function TripCountdown({ checkIn }: { checkIn: string }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const diff = parseISO(checkIn).getTime() - now;
+  if (diff <= 0) return <span className="text-amber-500 font-bold">Trip time!</span>;
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+  const minutes = Math.floor((diff / (1000 * 60)) % 60);
+  const seconds = Math.floor((diff / 1000) % 60);
+
+  const units = [
+    { value: days, label: 'd' },
+    { value: hours, label: 'h' },
+    { value: minutes, label: 'm' },
+    { value: seconds, label: 's' },
+  ];
 
   return (
-    <Card className="rounded-xl shadow-sm overflow-hidden">
-      <CardContent className="p-0">
-        <div className="flex flex-col sm:flex-row">
-          <div className="sm:w-36 h-32 sm:h-auto bg-gradient-to-br from-sky-100 to-amber-100 flex items-center justify-center flex-shrink-0">
-            <Luggage className="w-10 h-10 text-sky-400" />
+    <div className="flex gap-2" aria-label={`${days} days, ${hours} hours, ${minutes} minutes until your trip`}>
+      {units.map((u) => (
+        <div key={u.label} className="text-center">
+          <div className="bg-gray-900 text-white rounded-lg px-2.5 py-1.5 font-mono text-lg font-bold tabular-nums min-w-[2.5rem]">
+            {String(u.value).padStart(2, '0')}
           </div>
-          <div className="flex-1 p-4">
-            <div className="flex items-start justify-between gap-2 mb-1">
-              <h3 className="font-semibold text-base leading-tight">{booking.listing_name}</h3>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${STATUS_COLORS[booking.status] ?? 'bg-gray-100 text-gray-700'}`}>
-                {booking.status}
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground mb-2">Ref: {booking.confirmation_code}</p>
-            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mb-3">
-              <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{format(parseISO(booking.check_in), 'MMM d')} – {format(parseISO(booking.check_out), 'MMM d, yyyy')}</span>
-              <span>{booking.guest_count} {booking.guest_count === 1 ? 'guest' : 'guests'}</span>
-              <span className="font-medium text-foreground">${booking.total_usd}</span>
-            </div>
-            {!past && days !== null && days >= 0 && (
-              <p className="text-xs font-semibold text-sky-600 mb-2">
-                {days === 0 ? 'Today!' : days === 1 ? 'Tomorrow!' : `In ${days} days!`}
-              </p>
-            )}
-            {withinWeek && (
-              <p className="flex items-center gap-1 text-xs text-amber-600 mb-2">
-                <Cloud className="w-3 h-3" /> Pre-trip info available
-              </p>
-            )}
-            <div className="flex gap-2">
-              <Link
-                href={`/bookings/${booking.id}`}
-                className="text-xs px-3 py-1.5 rounded-lg bg-sky-500 text-white font-medium hover:bg-sky-600 transition-colors"
-              >
-                View Booking
-              </Link>
-              {past && (
-                <button className="text-xs px-3 py-1.5 rounded-lg border text-muted-foreground hover:border-sky-400 hover:text-sky-600 transition-colors">
-                  <Star className="w-3 h-3 inline mr-1" />Leave Review
-                </button>
-              )}
-            </div>
-          </div>
+          <div className="text-[10px] text-muted-foreground mt-0.5 uppercase">{u.label}</div>
         </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function EmptyState({ tab }: { tab: Tab }) {
-  const configs: Record<Tab, { icon: React.ReactNode; text: string; cta: string; href: string }> = {
-    upcoming: {
-      icon: <Luggage className="w-12 h-12 text-sky-300" />,
-      text: "No upcoming trips yet.",
-      cta: "Explore Venezuela →",
-      href: "/",
-    },
-    past: {
-      icon: <Star className="w-12 h-12 text-amber-300" />,
-      text: "No past trips to show.",
-      cta: "Plan your first adventure →",
-      href: "/",
-    },
-    itineraries: {
-      icon: <BookOpen className="w-12 h-12 text-sky-300" />,
-      text: "No saved itineraries yet.",
-      cta: "Start planning →",
-      href: "/itinerary/new",
-    },
-    saved: {
-      icon: <Heart className="w-12 h-12 text-red-300" />,
-      text: "No saved places yet.",
-      cta: "Explore listings →",
-      href: "/",
-    },
-  };
-
-  const { icon, text, cta, href } = configs[tab];
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="mb-4">{icon}</div>
-      <p className="text-muted-foreground mb-3">{text}</p>
-      <Link href={href} className="text-sm font-medium text-sky-500 hover:underline">{cta}</Link>
+      ))}
     </div>
   );
 }
 
+// Horizontal scroll carousel
+function CollectionCarousel({ title, icon, children, emptyMessage, emptyHref, count }: {
+  title: string; icon: React.ReactNode; children: React.ReactNode;
+  emptyMessage: string; emptyHref: string; count: number;
+}) {
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-base flex items-center gap-2">
+          {icon}
+          {title}
+          {count > 0 && (
+            <span className="text-xs bg-sky-100 text-sky-700 rounded-full px-2 py-0.5">{count}</span>
+          )}
+        </h2>
+        {count > 3 && (
+          <Link href="#" className="text-xs text-sky-500 hover:underline flex items-center gap-0.5">
+            See all <ChevronRight className="w-3 h-3" />
+          </Link>
+        )}
+      </div>
+
+      {count > 0 ? (
+        <div className="flex gap-4 overflow-x-auto pb-3 -mx-4 px-4 snap-x snap-mandatory scrollbar-none">
+          {children}
+        </div>
+      ) : (
+        <GlassCard className="p-8 text-center">
+          <div className="text-3xl mb-2 opacity-40">{icon}</div>
+          <p className="text-sm text-muted-foreground mb-2">{emptyMessage}</p>
+          <Link href={emptyHref} className="text-sm font-medium text-sky-500 hover:underline">
+            Get started <ChevronRight className="w-3 h-3 inline" />
+          </Link>
+        </GlassCard>
+      )}
+    </motion.section>
+  );
+}
+
 export default function TripsPage() {
-  const router = useRouter();
   const { user, profile, loading, isAuthenticated } = useAuth();
   const { items: recentlyViewed } = useRecentlyViewed();
-  const [tab, setTab] = useState<Tab>('upcoming');
+  const { favorites } = useFavorites();
   const [bookings, setBookings] = useState<GuestBooking[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [itineraries, setItineraries] = useState<SavedItinerary[]>([]);
@@ -167,13 +165,11 @@ export default function TripsPage() {
       .catch(() => {})
       .finally(() => setBookingsLoading(false));
 
-    // Load itineraries from localStorage
     try {
       const stored = localStorage.getItem('vz-itineraries');
       if (stored) setItineraries(JSON.parse(stored));
     } catch {}
 
-    // Load saved places from Supabase favorites
     const supabase = createClient();
     if (supabase) {
       (async () => {
@@ -198,195 +194,361 @@ export default function TripsPage() {
   }, [isAuthenticated, user]);
 
   const firstName = profile?.full_name?.split(' ')[0] ?? user?.email?.split('@')[0] ?? 'there';
-
   const upcoming = bookings.filter(
     (b) => b.status === 'confirmed' && isFuture(parseISO(b.check_in))
   );
-  const past = bookings.filter((b) => isPast(parseISO(b.check_out)));
+  const pastTrips = bookings.filter((b) => isPast(parseISO(b.check_out)));
+  const nextTrip = upcoming[0];
 
-  const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'upcoming', label: 'Upcoming', count: upcoming.length },
-    { id: 'past', label: 'Past', count: past.length },
-    { id: 'itineraries', label: 'Itineraries', count: itineraries.length },
-    { id: 'saved', label: 'Saved Places', count: savedPlaces.length },
-  ];
+  // AI suggestion based on interests (static for now)
+  const userInterests = ['beaches', 'mountains', 'adventure'];
+  const suggestions: Record<string, { text: string; destination: string; href: string }> = {
+    beaches: { text: 'Los Roques is stunning this time of year. Crystal-clear water, white sand, zero crowds.', destination: 'Los Roques', href: '/library/region/los-roques' },
+    mountains: { text: 'The Andes near Merida are perfect right now. Cool weather, dramatic peaks, incredible hikes.', destination: 'Merida', href: '/library/region/merida' },
+    adventure: { text: 'Canaima and Angel Falls are calling. The waterfalls are at peak flow.', destination: 'Canaima', href: '/library/region/canaima' },
+  };
+  const suggestion = suggestions[userInterests[0]] || suggestions.beaches;
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500" />
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full"
+        />
       </div>
     );
   }
   if (!isAuthenticated) return null;
 
   return (
-    <div className="container px-4 py-8 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-1">My Trips</h1>
-      <p className="text-muted-foreground text-sm mb-6">Welcome back, {firstName}! Here&apos;s your travel history.</p>
+    <div className="min-h-screen bg-gradient-to-b from-sky-50/50 via-white to-amber-50/20">
+      <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap -mb-px ${
-              tab === t.id
-                ? 'border-sky-500 text-sky-600'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+        {/* Greeting Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <h1 className="text-2xl font-bold">{getGreeting()}, {firstName}</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {upcoming.length > 0
+              ? `You have ${upcoming.length} upcoming ${upcoming.length === 1 ? 'trip' : 'trips'}`
+              : 'Ready for your next Venezuelan adventure?'}
+          </p>
+        </motion.div>
+
+        {/* Quick Actions */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="flex gap-3 overflow-x-auto pb-1 scrollbar-none"
+        >
+          <Link
+            href="/"
+            className="flex items-center gap-2 px-4 py-2.5 bg-sky-500 text-white rounded-full text-sm font-medium whitespace-nowrap hover:bg-sky-600 transition-colors shadow-md"
           >
-            {t.label}
-            {t.count !== undefined && t.count > 0 && (
-              <span className="ml-1.5 text-xs bg-sky-100 text-sky-700 rounded-full px-1.5 py-0.5">{t.count}</span>
+            <Plus className="w-4 h-4" /> Plan Trip
+          </Link>
+          <Link
+            href="/library"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white/70 backdrop-blur-sm border border-gray-200 rounded-full text-sm font-medium whitespace-nowrap hover:border-sky-400 transition-colors"
+          >
+            <Search className="w-4 h-4" /> Explore
+          </Link>
+          <Link
+            href="/trips"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white/70 backdrop-blur-sm border border-gray-200 rounded-full text-sm font-medium whitespace-nowrap hover:border-sky-400 transition-colors"
+          >
+            <ListChecks className="w-4 h-4" /> My Lists
+          </Link>
+        </motion.div>
+
+        {/* Stats Overview */}
+        <GlassCard className="p-4">
+          <div className="grid grid-cols-4 gap-4 text-center">
+            <AnimatedCounter value={upcoming.length + pastTrips.length} label="Total Trips" size="md" />
+            <AnimatedCounter value={savedPlaces.length + favorites.length} label="Saved" size="md" />
+            <AnimatedCounter value={itineraries.length} label="Itineraries" size="md" />
+            <AnimatedCounter value={recentlyViewed.length} label="Explored" size="md" />
+          </div>
+        </GlassCard>
+
+        {/* Next Trip Hero Card */}
+        <AnimatePresence>
+          {nextTrip && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.5 }}
+            >
+              <Link href={`/bookings/${nextTrip.id}`}>
+                <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-sky-600 to-sky-800 text-white p-6 shadow-xl">
+                  <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+                  <div className="relative">
+                    <Badge className="bg-white/20 text-white border-0 text-xs mb-3">Next Trip</Badge>
+                    <h3 className="text-xl font-bold mb-1">{nextTrip.listing_name}</h3>
+                    <p className="text-white/70 text-sm mb-4">
+                      {format(parseISO(nextTrip.check_in), 'MMM d')} – {format(parseISO(nextTrip.check_out), 'MMM d, yyyy')}
+                      {' · '}{nextTrip.guest_count} {nextTrip.guest_count === 1 ? 'guest' : 'guests'}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <TripCountdown checkIn={nextTrip.check_in} />
+                      <div className="text-right">
+                        <div className="text-2xl font-bold">${nextTrip.total_usd}</div>
+                        <div className="text-white/60 text-xs">total</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Trip Timeline */}
+        {(upcoming.length > 0 || pastTrips.length > 0) && (
+          <div className="space-y-4">
+            {upcoming.length > 0 && (
+              <div>
+                <h2 className="font-semibold text-base flex items-center gap-2 mb-3">
+                  <Luggage className="w-4 h-4 text-sky-500" />
+                  Upcoming
+                  <span className="text-xs bg-sky-100 text-sky-700 rounded-full px-2 py-0.5">{upcoming.length}</span>
+                </h2>
+                <div className="space-y-3">
+                  {upcoming.map((b, i) => (
+                    <motion.div
+                      key={b.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                    >
+                      <Link href={`/bookings/${b.id}`}>
+                        <GlassCard className="p-4 hover:shadow-xl transition-shadow cursor-pointer">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-sm truncate">{b.listing_name}</h3>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {format(parseISO(b.check_in), 'MMM d')} – {format(parseISO(b.check_out), 'MMM d')}
+                              </p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <span className="text-xs font-semibold text-sky-600">
+                                {daysUntil(b.check_in) === 0 ? 'Today!' : `${daysUntil(b.check_in)}d`}
+                              </span>
+                            </div>
+                          </div>
+                        </GlassCard>
+                      </Link>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
             )}
-          </button>
-        ))}
-      </div>
 
-      {/* Tab content */}
-      {tab === 'upcoming' && (
-        bookingsLoading ? (
-          <div className="space-y-4">{[1,2].map(i => <div key={i} className="h-32 rounded-xl bg-muted animate-pulse" />)}</div>
-        ) : upcoming.length > 0 ? (
-          <div className="space-y-4">
-            {upcoming.map((b) => <BookingCard key={b.id} booking={b} />)}
+            {pastTrips.length > 0 && (
+              <div>
+                <h2 className="font-semibold text-base flex items-center gap-2 mb-3">
+                  <Star className="w-4 h-4 text-amber-400" />
+                  Past Trips
+                  <span className="text-xs bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">{pastTrips.length}</span>
+                </h2>
+                <div className="space-y-3">
+                  {pastTrips.slice(0, 3).map((b, i) => (
+                    <motion.div
+                      key={b.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                    >
+                      <GlassCard className="p-4 opacity-80">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-sm truncate">{b.listing_name}</h3>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {format(parseISO(b.check_in), 'MMM d')} – {format(parseISO(b.check_out), 'MMM d, yyyy')}
+                            </p>
+                          </div>
+                          <button className="text-xs px-3 py-1.5 rounded-lg border hover:border-amber-400 hover:text-amber-600 transition-colors whitespace-nowrap">
+                            <Star className="w-3 h-3 inline mr-1" />Review
+                          </button>
+                        </div>
+                      </GlassCard>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        ) : (
-          <EmptyState tab="upcoming" />
-        )
-      )}
+        )}
 
-      {tab === 'past' && (
-        bookingsLoading ? (
-          <div className="space-y-4">{[1,2].map(i => <div key={i} className="h-32 rounded-xl bg-muted animate-pulse" />)}</div>
-        ) : past.length > 0 ? (
-          <div className="space-y-4">
-            {past.map((b) => <BookingCard key={b.id} booking={b} past />)}
-          </div>
-        ) : (
-          <EmptyState tab="past" />
-        )
-      )}
+        {/* Empty state when no trips at all */}
+        {upcoming.length === 0 && pastTrips.length === 0 && !bookingsLoading && (
+          <GlassCard className="p-8 text-center">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2, type: 'spring' }}
+            >
+              <Compass className="w-12 h-12 text-sky-300 mx-auto mb-3" />
+              <h3 className="font-semibold text-lg mb-1">Your adventure starts here</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Discover incredible experiences across Venezuela and book your first trip
+              </p>
+              <Link
+                href="/library"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-sky-500 text-white rounded-full text-sm font-medium hover:bg-sky-600 transition-colors"
+              >
+                <Search className="w-4 h-4" /> Explore Venezuela
+              </Link>
+            </motion.div>
+          </GlassCard>
+        )}
 
-      {tab === 'itineraries' && (
-        itineraries.length > 0 ? (
-          <div className="space-y-4">
-            {itineraries.map((it) => (
-              <Card key={it.id} className="rounded-xl shadow-sm">
-                <CardContent className="p-4 flex items-center justify-between gap-4">
-                  <div>
-                    <h3 className="font-semibold">{it.title}</h3>
-                    {it.start_date && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {format(parseISO(it.start_date), 'MMM d')}
-                        {it.end_date ? ` – ${format(parseISO(it.end_date), 'MMM d, yyyy')}` : ''}
+        {/* Collections */}
+        <div className="space-y-6">
+          {/* Saved Places */}
+          <CollectionCarousel
+            title="Saved Places"
+            icon={<Heart className="w-4 h-4 text-red-400" />}
+            count={savedPlaces.length}
+            emptyMessage="Save places you love while exploring"
+            emptyHref="/library"
+          >
+            {savedPlaces.map((place) => (
+              <Link key={place.id} href={place.slug ? `/listing/${place.slug}` : '#'} className="snap-start flex-shrink-0 w-[240px]">
+                <motion.div
+                  whileHover={{ y: -4 }}
+                  className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-shadow"
+                >
+                  <div className="h-28 bg-gradient-to-br from-sky-100 to-amber-100 relative">
+                    {place.cover_image_url && (
+                      <img src={place.cover_image_url} alt={place.title} className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <h3 className="font-semibold text-sm leading-tight line-clamp-1">{place.title}</h3>
+                    {place.location_name && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3" />{place.location_name}
                       </p>
                     )}
-                    {it.stops && (
-                      <p className="text-xs text-muted-foreground">{(it.stops as unknown[]).length} stops</p>
-                    )}
                   </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <Link href={`/itinerary/${it.id}`} className="text-xs px-3 py-1.5 rounded-lg border hover:border-sky-400 hover:text-sky-600 transition-colors">View</Link>
-                    <Link href={`/itinerary/${it.id}?edit=1`} className="text-xs px-3 py-1.5 rounded-lg bg-sky-500 text-white hover:bg-sky-600 transition-colors">
-                      <Pencil className="w-3 h-3 inline mr-1" />Edit
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <EmptyState tab="itineraries" />
-        )
-      )}
-
-      {tab === 'saved' && (
-        savedLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[1,2,3,4].map(i => <div key={i} className="h-48 rounded-xl bg-muted animate-pulse" />)}
-          </div>
-        ) : savedPlaces.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {savedPlaces.map((place) => (
-              <Link key={place.id} href={place.slug ? `/listing/${place.slug}` : '#'}>
-                <Card className="rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                  <CardContent className="p-0">
-                    <div className="h-32 bg-gradient-to-br from-sky-100 to-amber-100 relative">
-                      {place.cover_image_url && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={place.cover_image_url} alt={place.title} className="w-full h-full object-cover" />
-                      )}
-                    </div>
-                    <div className="p-3">
-                      <h3 className="font-semibold text-sm leading-tight">{place.title}</h3>
-                      {place.location_name && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3" />{place.location_name}
-                        </p>
-                      )}
-                      {place.price_usd && (
-                        <p className="text-xs font-medium text-sky-600 mt-1">From ${place.price_usd}/person</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                </motion.div>
               </Link>
             ))}
-          </div>
-        ) : (
-          <EmptyState tab="saved" />
-        )
-      )}
+          </CollectionCarousel>
 
-      {/* Recently Viewed */}
-      {recentlyViewed.length > 0 && (
-        <div className="mt-10">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-muted-foreground" />
-            Recently Viewed
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Itineraries */}
+          <CollectionCarousel
+            title="Itineraries"
+            icon={<BookOpen className="w-4 h-4 text-sky-500" />}
+            count={itineraries.length}
+            emptyMessage="Create your first travel itinerary"
+            emptyHref="/"
+          >
+            {itineraries.map((it) => (
+              <Link key={it.id} href={`/itinerary/${it.id}`} className="snap-start flex-shrink-0 w-[240px]">
+                <motion.div
+                  whileHover={{ y: -4 }}
+                  className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-xl p-4 shadow-md hover:shadow-lg transition-shadow h-full"
+                >
+                  <h3 className="font-semibold text-sm mb-1">{it.title}</h3>
+                  {it.start_date && (
+                    <p className="text-xs text-muted-foreground">
+                      {format(parseISO(it.start_date), 'MMM d')}
+                      {it.end_date ? ` – ${format(parseISO(it.end_date), 'MMM d')}` : ''}
+                    </p>
+                  )}
+                  {it.stops && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{(it.stops as unknown[]).length} stops</p>
+                  )}
+                  <div className="mt-3 flex gap-2">
+                    <span className="text-xs px-2.5 py-1 rounded-lg bg-sky-50 text-sky-600 font-medium">View</span>
+                    <span className="text-xs px-2.5 py-1 rounded-lg bg-gray-50 text-gray-600 font-medium flex items-center gap-1">
+                      <Pencil className="w-3 h-3" />Edit
+                    </span>
+                  </div>
+                </motion.div>
+              </Link>
+            ))}
+          </CollectionCarousel>
+
+          {/* Recently Viewed */}
+          <CollectionCarousel
+            title="Recently Viewed"
+            icon={<Clock className="w-4 h-4 text-gray-400" />}
+            count={recentlyViewed.length}
+            emptyMessage="Places you've browsed will appear here"
+            emptyHref="/library"
+          >
             {recentlyViewed.map((item) => (
-              <Link key={item.id} href={`/listing/${item.slug}`}>
-                <Card className="rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                  <CardContent className="p-0">
-                    <div className="h-28 bg-gradient-to-br from-sky-100 to-amber-100 relative">
-                      {item.cover_image_url && (
-                        <Image
-                          src={item.cover_image_url}
-                          alt={item.title}
-                          fill
-                          className="object-cover"
-                        />
-                      )}
-                      <span className="absolute bottom-2 left-2 text-xs bg-black/50 text-white px-2 py-0.5 rounded-full capitalize">
-                        {item.category}
-                      </span>
+              <Link key={item.id} href={`/listing/${item.slug}`} className="snap-start flex-shrink-0 w-[240px]">
+                <motion.div
+                  whileHover={{ y: -4 }}
+                  className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-shadow"
+                >
+                  <div className="h-28 bg-gradient-to-br from-sky-100 to-amber-100 relative">
+                    {item.cover_image_url && (
+                      <Image src={item.cover_image_url} alt={item.title} fill className="object-cover" />
+                    )}
+                    <span className="absolute bottom-2 left-2 text-xs bg-black/50 text-white px-2 py-0.5 rounded-full capitalize">
+                      {item.category}
+                    </span>
+                  </div>
+                  <div className="p-3">
+                    <h3 className="font-semibold text-sm leading-tight line-clamp-1">{item.title}</h3>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />{item.location_name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(item.viewed_at), { addSuffix: true })}
+                      </p>
                     </div>
-                    <div className="p-3">
-                      <h3 className="font-semibold text-sm leading-tight line-clamp-1">{item.title}</h3>
-                      <div className="flex items-center justify-between mt-1">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />{item.location_name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(item.viewed_at), { addSuffix: true })}
-                        </p>
-                      </div>
-                      {item.price_usd && (
-                        <p className="text-xs font-medium text-sky-600 mt-1">${item.price_usd} / person</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </motion.div>
               </Link>
             ))}
-          </div>
+          </CollectionCarousel>
         </div>
-      )}
+
+        {/* AI Suggestion Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+        >
+          <div className="relative rounded-2xl overflow-hidden p-[1px] bg-gradient-to-r from-sky-400 via-amber-400 to-sky-400">
+            <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-2xl p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-sky-400 to-amber-400 flex items-center justify-center flex-shrink-0">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-sky-600 mb-1">AI Travel Tip</p>
+                  <p className="text-sm text-foreground leading-relaxed">
+                    {suggestion.text}
+                  </p>
+                  <Link
+                    href={suggestion.href}
+                    className="inline-flex items-center gap-1 text-sm font-medium text-sky-500 mt-2 hover:underline"
+                  >
+                    Explore {suggestion.destination} <ChevronRight className="w-3 h-3" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+      </div>
     </div>
   );
 }
