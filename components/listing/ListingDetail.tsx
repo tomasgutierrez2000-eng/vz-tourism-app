@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ImageGallery } from '@/components/common/ImageGallery';
 import { SafetyBadge } from '@/components/common/SafetyBadge';
+import { FavoriteButton } from '@/components/listing/FavoriteButton';
 import { BookingForm } from './BookingForm';
 import { ReviewSection } from './ReviewSection';
 import { useRecentlyViewed } from '@/hooks/use-recently-viewed';
@@ -72,6 +73,7 @@ export function ListingDetail({ listing, reviews, canReview, bookingId }: Listin
               </span>
             </div>
           </div>
+          <FavoriteButton listingId={listing.id} className="scale-125" />
         </div>
       </div>
 
