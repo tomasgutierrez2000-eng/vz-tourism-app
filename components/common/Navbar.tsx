@@ -29,18 +29,18 @@ export function Navbar() {
 
         <div className="hidden md:flex items-center gap-6">
           <Link
-            href="/"
-            className={`flex items-center gap-1.5 text-sm font-medium transition-colors hover:text-primary ${pathname === '/' ? 'text-primary' : 'text-muted-foreground'}`}
+            href="/map"
+            className={`flex items-center gap-1.5 text-sm font-medium transition-colors hover:text-primary ${pathname === '/map' ? 'text-primary' : 'text-muted-foreground'}`}
           >
             <Map className="w-4 h-4" />
-            Explore
+            Map
           </Link>
           <Link
             href="/library"
-            className={`flex items-center gap-1.5 text-sm font-medium transition-colors hover:text-primary ${pathname.startsWith('/library') ? 'text-primary' : 'text-muted-foreground'}`}
+            className={`flex items-center gap-1.5 text-sm font-medium transition-colors hover:text-primary ${pathname === '/' || pathname.startsWith('/library') ? 'text-primary' : 'text-muted-foreground'}`}
           >
             <BookOpen className="w-4 h-4" />
-            Library
+            Explore
           </Link>
           <Link
             href="/discover"
