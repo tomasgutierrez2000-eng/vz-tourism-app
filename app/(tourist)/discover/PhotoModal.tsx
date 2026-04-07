@@ -2,16 +2,26 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { X, MapPin, Plus, ChevronRight, ExternalLink } from 'lucide-react';
+
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+    </svg>
+  );
+}
 import type { DiscoverItem } from './types';
 
-interface NearbyListing {
+interface NearbyPost {
   id: string;
-  title: string;
-  slug?: string;
-  type: string;
-  rating: number | null;
-  cover_image_url: string | null;
-  region: string;
+  url: string;
+  caption: string;
+  creator_handle?: string | null;
+  instagram_post_url?: string | null;
+  geo_label: string;
+  source_type?: string;
 }
 
 interface PhotoModalProps {
@@ -79,21 +89,21 @@ function SmallMap({ lat, lng, label }: { lat: number; lng: number; label: string
 }
 
 export function PhotoModal({ item, onClose, onAddToTrip }: PhotoModalProps) {
-  const [nearby, setNearby] = useState<NearbyListing[]>([]);
-  const [loadingNearby, setLoadingNearby] = useState(true);
+  const [instaPosts, setInstaPosts] = useState<NearbyPost[]>([]);
+  const [loadingInsta, setLoadingInsta] = useState(true);
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  // Fetch nearby stays
+  // Fetch Instagram posts from this location
   useEffect(() => {
-    setLoadingNearby(true);
-    fetch(`/api/listings?region=${item.region}&limit=3`)
+    setLoadingInsta(true);
+    fetch(`/api/discover/nearby-instagram?region=${item.region}&lat=${item.lat}&lng=${item.lng}&exclude=${item.id}&limit=9`)
       .then((r) => r.json())
       .then((json) => {
-        setNearby(json.data ?? []);
-        setLoadingNearby(false);
+        setInstaPosts(json.posts ?? []);
+        setLoadingInsta(false);
       })
-      .catch(() => setLoadingNearby(false));
-  }, [item.region]);
+      .catch(() => setLoadingInsta(false));
+  }, [item.region, item.lat, item.lng, item.id]);
 
   // Close on Escape
   useEffect(() => {
@@ -243,61 +253,78 @@ export function PhotoModal({ item, onClose, onAddToTrip }: PhotoModalProps) {
           {/* Divider */}
           <div className="border-t border-gray-100 mb-4" />
 
-          {/* Nearby stays */}
+          {/* Photos from this location + Instagram link */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-800 mb-2.5">Nearby Stays</h3>
-            {loadingNearby ? (
-              <div className="space-y-2">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="h-16 rounded-xl bg-gray-100 animate-pulse" />
+            <div className="flex items-center gap-2 mb-2.5">
+              <InstagramIcon className="w-4 h-4 text-pink-500" />
+              <h3 className="text-sm font-semibold text-gray-800">Photos from {item.region_name}</h3>
+            </div>
+            {loadingInsta ? (
+              <div className="grid grid-cols-3 gap-1.5">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="aspect-square rounded-lg bg-gray-100 animate-pulse" />
                 ))}
               </div>
-            ) : nearby.length === 0 ? (
-              <p className="text-sm text-gray-400 italic">No stays found nearby.</p>
+            ) : instaPosts.length === 0 ? (
+              <div className="text-center py-6 bg-gradient-to-br from-pink-50 to-purple-50 rounded-xl">
+                <InstagramIcon className="w-8 h-8 text-pink-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-500 mb-3">No photos from this spot yet</p>
+                <a
+                  href={`https://www.instagram.com/explore/tags/${encodeURIComponent(item.region_name.toLowerCase().replace(/\s+/g, ''))}/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm text-pink-600 hover:text-pink-700 font-medium transition-colors"
+                >
+                  Search on Instagram
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
             ) : (
-              <div className="space-y-1.5">
-                {nearby.map((stay) => (
-                  <a
-                    key={stay.id}
-                    href={`/listing/${stay.slug || stay.id}`}
-                    className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors group"
-                  >
-                    <div className="w-11 h-11 rounded-lg overflow-hidden bg-gray-200 flex-shrink-0">
-                      {stay.cover_image_url ? (
-                        <img src={stay.cover_image_url} alt={stay.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-lg">
-                          🏡
+              <>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {instaPosts.map((post) => {
+                    const isInstagram = post.source_type === 'instagram' && post.instagram_post_url;
+                    const Wrapper = isInstagram ? 'a' : 'div';
+                    const linkProps = isInstagram
+                      ? { href: post.instagram_post_url!, target: '_blank' as const, rel: 'noopener noreferrer' }
+                      : {};
+                    return (
+                      <Wrapper
+                        key={post.id}
+                        {...linkProps}
+                        className="group relative aspect-square rounded-lg overflow-hidden bg-gray-100"
+                      >
+                        <img
+                          src={post.url}
+                          alt={post.caption}
+                          className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-end p-1.5 opacity-0 group-hover:opacity-100">
+                          <span className="text-[10px] text-white font-medium truncate">
+                            {post.creator_handle ? `@${post.creator_handle}` : post.geo_label}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors">
-                        {stay.title}
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-gray-500 capitalize">{stay.type}</span>
-                        {stay.rating !== null && (
-                          <>
-                            <span className="text-gray-300 text-xs">·</span>
-                            <span className="text-xs text-amber-600 font-medium">★ {stay.rating.toFixed(1)}</span>
-                          </>
+                        {isInstagram && (
+                          <div className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center"
+                            style={{ background: 'linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045)' }}>
+                            <InstagramIcon className="w-3 h-3 text-white" />
+                          </div>
                         )}
-                      </div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors flex-shrink-0" />
-                  </a>
-                ))}
-              </div>
+                      </Wrapper>
+                    );
+                  })}
+                </div>
+                <a
+                  href={`https://www.instagram.com/explore/tags/${encodeURIComponent(item.region_name.toLowerCase().replace(/\s+/g, ''))}/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 flex items-center gap-1.5 text-sm text-pink-600 hover:text-pink-700 font-medium transition-colors"
+                >
+                  See more on Instagram
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </>
             )}
-
-            <a
-              href={`/explore?region=${item.region}`}
-              className="mt-3 flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
-            >
-              See all stays in {item.region_name}
-              <ChevronRight className="w-3.5 h-3.5" />
-            </a>
           </div>
         </div>
       </div>
