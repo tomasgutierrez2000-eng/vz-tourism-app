@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -19,9 +20,7 @@ interface DayData {
 interface AvailabilityCalendarProps {
   listingId: string;
   basePrice?: number;
-  onBook?: (checkIn: string, checkOut: string, nights: number, total: number) => void;
-  selectedDate?: Date;
-  onDateSelect?: (date: Date | undefined) => void;
+  onRangeSelect?: (checkIn: string, checkOut: string | null) => void;
   className?: string;
 }
 
@@ -64,10 +63,14 @@ function formatMonthLabel(year: number, month: number) {
   });
 }
 
-const today = new Date().toISOString().split('T')[0]!;
+function formatDateShort(dateStr: string): string {
+  return format(parseISO(dateStr), 'EEE, MMM d');
+}
+
+const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local tz
 
 // ---------------------------------------------------------------------------
-// Single-month mini calendar
+// Single-month grid
 // ---------------------------------------------------------------------------
 
 interface MonthGridProps {
@@ -109,22 +112,19 @@ function MonthGrid({
     rangeEnd !== null && dateStr === rangeEnd && dateStr !== checkIn;
 
   return (
-    <div className="flex-1 min-w-0">
-      <div className="text-center font-medium text-sm mb-3">
-        {formatMonthLabel(year, month)}
-      </div>
+    <div className="w-full">
       {/* Weekday headers */}
-      <div className="grid grid-cols-7">
+      <div className="grid grid-cols-7 mb-1">
         {WEEKDAYS.map((d) => (
-          <div key={d} className="text-center text-xs text-muted-foreground py-1">
+          <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1.5">
             {d}
           </div>
         ))}
       </div>
       {/* Day grid */}
-      <div className="grid grid-cols-7">
+      <div className="grid grid-cols-7" role="grid" aria-label={formatMonthLabel(year, month)}>
         {Array.from({ length: firstDow }).map((_, i) => (
-          <div key={`pad-${i}`} />
+          <div key={`pad-${i}`} role="gridcell" />
         ))}
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const day = i + 1;
@@ -137,9 +137,17 @@ function MonthGrid({
           const isEnd = isRangeEnd(dateStr);
           const isSelected = isStart || isEnd;
 
+          const priceLabel = data?.price !== null && data?.price !== undefined
+            ? `$${data.price} per night`
+            : '';
+          const ariaLabel = unavailable
+            ? `${format(new Date(year, month, day), 'MMMM d, yyyy')}, unavailable`
+            : `${format(new Date(year, month, day), 'MMMM d, yyyy')}${priceLabel ? ', ' + priceLabel : ''}`;
+
           return (
             <div
               key={dateStr}
+              role="gridcell"
               className={cn(
                 'relative flex items-center justify-center',
                 inRange && 'bg-primary/10',
@@ -150,13 +158,18 @@ function MonthGrid({
               <button
                 type="button"
                 disabled={unavailable}
+                aria-label={ariaLabel}
+                aria-selected={isSelected}
+                aria-disabled={unavailable}
                 onClick={() => !unavailable && onDayClick(dateStr)}
                 onMouseEnter={() => onDayHover(dateStr)}
                 onMouseLeave={() => onDayHover(null)}
                 className={cn(
-                  'w-9 h-9 rounded-full text-sm transition-colors flex flex-col items-center justify-center gap-0',
+                  'w-9 h-9 rounded-full text-sm flex flex-col items-center justify-center gap-0',
+                  'transition-colors duration-150',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
                   unavailable && 'opacity-30 cursor-not-allowed line-through text-muted-foreground',
-                  !unavailable && !isSelected && 'hover:bg-muted',
+                  !unavailable && !isSelected && 'hover:bg-muted cursor-pointer',
                   isSelected && 'bg-primary text-primary-foreground font-medium',
                   dateStr === today && !isSelected && 'font-bold underline'
                 )}
@@ -188,12 +201,7 @@ function MonthGrid({
 export function AvailabilityCalendar({
   listingId,
   basePrice,
-  onBook,
-  // selectedDate and onDateSelect are accepted for external control but handled by parent
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  selectedDate: _selectedDate,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onDateSelect: _onDateSelect,
+  onRangeSelect,
   className,
 }: AvailabilityCalendarProps) {
   const initialMonth = (() => {
@@ -201,23 +209,22 @@ export function AvailabilityCalendar({
     return { year: d.getFullYear(), month: d.getMonth() };
   })();
 
-  const [startMonth, setStartMonth] = useState(initialMonth);
-  const secondMonth = addMonths(startMonth.year, startMonth.month, 1);
-
+  const [currentMonth, setCurrentMonth] = useState(initialMonth);
   const [availability, setAvailability] = useState<Map<string, DayData>>(new Map());
   const [checkIn, setCheckIn] = useState<string | null>(null);
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [hoverDate, setHoverDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
 
-  // Fetch 2 months of availability
+  // Fetch availability for current month + next month (for range spans)
   const fetchAvailability = useCallback(async () => {
     setLoading(true);
-    // Fetch start of first month to end of second month
-    const start = isoDate(startMonth.year, startMonth.month, 1);
-    const endD = addMonths(startMonth.year, startMonth.month, 1);
-    const lastDay = new Date(endD.year, endD.month + 1, 0).getDate();
-    const end = isoDate(endD.year, endD.month, lastDay);
+    setFetchError(false);
+    const start = isoDate(currentMonth.year, currentMonth.month, 1);
+    const nextM = addMonths(currentMonth.year, currentMonth.month, 1);
+    const lastDay = new Date(nextM.year, nextM.month + 1, 0).getDate();
+    const end = isoDate(nextM.year, nextM.month, lastDay);
 
     try {
       const res = await fetch(
@@ -225,18 +232,22 @@ export function AvailabilityCalendar({
       );
       if (res.ok) {
         const d = await res.json();
-        const map = new Map<string, DayData>();
-        for (const entry of d.data ?? []) {
-          map.set(entry.date, entry);
-        }
-        setAvailability(map);
+        setAvailability((prev) => {
+          const map = new Map(prev);
+          for (const entry of d.data ?? []) {
+            map.set(entry.date, entry);
+          }
+          return map;
+        });
+      } else {
+        setFetchError(true);
       }
     } catch {
-      // keep existing
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
-  }, [listingId, startMonth]);
+  }, [listingId, currentMonth]);
 
   useEffect(() => {
     fetchAvailability();
@@ -251,6 +262,7 @@ export function AvailabilityCalendar({
       // Start new selection
       setCheckIn(date);
       setCheckOut(null);
+      onRangeSelect?.(date, null);
       return;
     }
     // Second click: set check-out
@@ -258,12 +270,13 @@ export function AvailabilityCalendar({
       // Clicked before check-in — restart
       setCheckIn(date);
       setCheckOut(null);
+      onRangeSelect?.(date, null);
       return;
     }
     // Validate: all dates in range must be available
     const rangeDates = datesInRange(checkIn, date);
     const hasUnavailable = rangeDates.some((d) => {
-      if (d === checkIn) return false; // check-in day itself is ok
+      if (d === checkIn) return false;
       const entry = availability.get(d);
       return entry ? !entry.is_available : false;
     });
@@ -271,14 +284,17 @@ export function AvailabilityCalendar({
       // Restart selection from clicked date
       setCheckIn(date);
       setCheckOut(null);
+      onRangeSelect?.(date, null);
       return;
     }
     setCheckOut(date);
+    onRangeSelect?.(checkIn, date);
   };
 
   const clearSelection = () => {
     setCheckIn(null);
     setCheckOut(null);
+    onRangeSelect?.('', null);
   };
 
   // ---------------------------------------------------------------------------
@@ -297,137 +313,165 @@ export function AvailabilityCalendar({
   })();
 
   // ---------------------------------------------------------------------------
-  // Prev / Next navigation
+  // Navigation
   // ---------------------------------------------------------------------------
 
   const prev = () =>
-    setStartMonth(({ year, month }) =>
+    setCurrentMonth(({ year, month }) =>
       month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 }
     );
 
   const next = () =>
-    setStartMonth(({ year, month }) =>
+    setCurrentMonth(({ year, month }) =>
       month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 }
     );
 
   const canGoPrev =
-    startMonth.year > initialMonth.year ||
-    startMonth.month > initialMonth.month;
+    currentMonth.year > initialMonth.year ||
+    currentMonth.month > initialMonth.month;
+
+  // ---------------------------------------------------------------------------
+  // Instruction bar state
+  // ---------------------------------------------------------------------------
+
+  const instructionContent = (() => {
+    if (checkIn && checkOut) {
+      return {
+        text: `${formatDateShort(checkIn)} — ${formatDateShort(checkOut)} · ${nights} night${nights !== 1 ? 's' : ''}`,
+        showClear: true,
+        showTotal: total > 0,
+      };
+    }
+    if (checkIn) {
+      return {
+        text: `${formatDateShort(checkIn)} → Select check-out`,
+        showClear: true,
+        showTotal: false,
+      };
+    }
+    return {
+      text: 'Select check-in date',
+      showClear: false,
+      showTotal: false,
+    };
+  })();
 
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
   return (
-    <div className={cn('space-y-4', className)}>
-      <div className="rounded-xl border bg-background p-4 space-y-4">
-        {/* Month navigation */}
-        <div className="flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={prev}
-            disabled={!canGoPrev}
-            className="w-8 h-8"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          {loading && (
-            <span className="text-xs text-muted-foreground">Loading…</span>
+    <div className={cn('space-y-3', className)}>
+      <div className="rounded-xl border bg-background overflow-hidden">
+        {/* Instruction bar */}
+        <div
+          className={cn(
+            'px-4 py-2.5 border-b transition-all duration-200',
+            checkIn && checkOut
+              ? 'bg-primary/5'
+              : checkIn
+                ? 'bg-amber-50 dark:bg-amber-950/30'
+                : 'bg-muted/30'
           )}
-          <Button variant="ghost" size="icon" onClick={next} className="w-8 h-8">
-            <ChevronRight className="w-4 h-4" />
-          </Button>
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className={cn(
+                'text-sm transition-colors duration-200',
+                checkIn && checkOut ? 'font-medium text-primary' : 'text-muted-foreground'
+              )}
+            >
+              {instructionContent.text}
+            </span>
+            <div className="flex items-center gap-2">
+              {instructionContent.showTotal && (
+                <span className="text-sm font-semibold">${total.toFixed(2)}</span>
+              )}
+              {instructionContent.showClear && (
+                <button
+                  onClick={clearSelection}
+                  className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded"
+                  aria-label="Clear date selection"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Two-month grid */}
-        <div className="flex gap-6">
-          <MonthGrid
-            year={startMonth.year}
-            month={startMonth.month}
-            availability={availability}
-            checkIn={checkIn}
-            checkOut={checkOut}
-            hoverDate={hoverDate}
-            onDayClick={handleDayClick}
-            onDayHover={setHoverDate}
-          />
-          <div className="w-px bg-border" />
-          <MonthGrid
-            year={secondMonth.year}
-            month={secondMonth.month}
-            availability={availability}
-            checkIn={checkIn}
-            checkOut={checkOut}
-            hoverDate={hoverDate}
-            onDayClick={handleDayClick}
-            onDayHover={setHoverDate}
-          />
-        </div>
+        {/* Calendar body */}
+        <div className="p-4 space-y-3">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={prev}
+              disabled={!canGoPrev}
+              className="w-8 h-8"
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="text-sm font-semibold">
+              {formatMonthLabel(currentMonth.year, currentMonth.month)}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={next}
+              className="w-8 h-8"
+              aria-label="Next month"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
 
-        {/* Legend */}
-        <div className="flex gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-primary inline-block" />
-            Selected
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-muted inline-block" />
-            Unavailable
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-yellow-400 inline-block" />
-            Special price
-          </span>
+          {/* Loading / Error / Calendar */}
+          {loading && !availability.size ? (
+            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+              Loading availability...
+            </div>
+          ) : fetchError && !availability.size ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-2">
+              <p className="text-sm text-muted-foreground">Could not load availability.</p>
+              <Button variant="outline" size="sm" onClick={fetchAvailability}>
+                Tap to retry
+              </Button>
+            </div>
+          ) : (
+            <div className={cn(loading && 'opacity-60 transition-opacity duration-200')}>
+              <MonthGrid
+                year={currentMonth.year}
+                month={currentMonth.month}
+                availability={availability}
+                checkIn={checkIn}
+                checkOut={checkOut}
+                hoverDate={hoverDate}
+                onDayClick={handleDayClick}
+                onDayHover={setHoverDate}
+              />
+            </div>
+          )}
+
+          {/* Legend */}
+          <div className="flex gap-3 text-[11px] text-muted-foreground pt-1">
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-primary inline-block" />
+              Selected
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-muted inline-block" />
+              Unavailable
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block" />
+              Special price
+            </span>
+          </div>
         </div>
       </div>
-
-      {/* Booking summary */}
-      {checkIn && (
-        <div className="rounded-xl border bg-background p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-medium text-sm">Your selection</h3>
-            <button
-              onClick={clearSelection}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Clear
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="rounded-md border px-3 py-2">
-              <div className="text-xs text-muted-foreground mb-0.5">Check-in</div>
-              <div className="font-medium">{checkIn}</div>
-            </div>
-            <div className="rounded-md border px-3 py-2">
-              <div className="text-xs text-muted-foreground mb-0.5">Check-out</div>
-              <div className={cn('font-medium', !checkOut && 'text-muted-foreground text-xs')}>
-                {checkOut ?? 'Select a date'}
-              </div>
-            </div>
-          </div>
-
-          {checkOut && nights > 0 && (
-            <>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {nights} night{nights !== 1 ? 's' : ''}
-                </span>
-                {total > 0 && (
-                  <span className="font-semibold">${total.toFixed(2)} total</span>
-                )}
-              </div>
-              <Button
-                className="w-full"
-                onClick={() => onBook?.(checkIn, checkOut, nights, total)}
-              >
-                Book Now
-              </Button>
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }

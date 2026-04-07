@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { format, parseISO } from 'date-fns';
 import {
-  Calendar,
   Users,
   User,
   Mail,
@@ -154,20 +154,25 @@ export function BookingForm({ listing }: BookingFormProps) {
     handleArrivalBooking,
   } = useBooking(listing);
 
-  const [checkInDate, setCheckInDate] = useState<Date | undefined>();
-  const [checkOutDate, setCheckOutDate] = useState<Date | undefined>();
   const [copied, setCopied] = useState(false);
 
   const stepIndex = ['select', 'details', 'review', 'payment', 'done'].indexOf(step);
 
-  const handleCheckInSelect = (date: Date | undefined) => {
-    setCheckInDate(date);
-    if (date) updateFormData({ check_in: date.toISOString().split('T')[0] });
+  const handleRangeSelect = (checkIn: string, checkOut: string | null) => {
+    if (checkIn) {
+      updateFormData({ check_in: checkIn, check_out: checkOut ?? undefined });
+    } else {
+      updateFormData({ check_in: '', check_out: undefined });
+    }
   };
 
-  const handleCheckOutSelect = (date: Date | undefined) => {
-    setCheckOutDate(date);
-    if (date) updateFormData({ check_out: date.toISOString().split('T')[0] });
+  const formatDate = (dateStr: string | undefined) => {
+    if (!dateStr) return '—';
+    try {
+      return format(parseISO(dateStr), 'EEE, MMM d, yyyy');
+    } catch {
+      return dateStr;
+    }
   };
 
   const canProceedFromSelect = !!formData.check_in;
@@ -220,29 +225,11 @@ export function BookingForm({ listing }: BookingFormProps) {
         {/* ─── STEP 1: Dates + Guests ─── */}
         {step === 'select' && (
           <>
-            <div className="space-y-1">
-              <Label className="flex items-center gap-1 text-sm">
-                <Calendar className="w-3.5 h-3.5" />
-                Check-in date *
-              </Label>
-              <AvailabilityCalendar
-                listingId={listing.id}
-                selectedDate={checkInDate}
-                onDateSelect={handleCheckInSelect}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="flex items-center gap-1 text-sm">
-                <Calendar className="w-3.5 h-3.5" />
-                Check-out date (optional)
-              </Label>
-              <AvailabilityCalendar
-                listingId={listing.id}
-                selectedDate={checkOutDate}
-                onDateSelect={handleCheckOutSelect}
-              />
-            </div>
+            <AvailabilityCalendar
+              listingId={listing.id}
+              basePrice={listing.price_usd}
+              onRangeSelect={handleRangeSelect}
+            />
 
             <div className="space-y-2">
               <Label className="flex items-center gap-1 text-sm">
@@ -392,12 +379,12 @@ export function BookingForm({ listing }: BookingFormProps) {
               <div className="font-semibold">{listing.title}</div>
               <div className="flex justify-between text-muted-foreground">
                 <span>Check-in</span>
-                <span className="font-medium text-foreground">{formData.check_in}</span>
+                <span className="font-medium text-foreground">{formatDate(formData.check_in)}</span>
               </div>
               <div className="flex justify-between text-muted-foreground">
                 <span>Check-out</span>
                 <span className="font-medium text-foreground">
-                  {formData.check_out || formData.check_in}
+                  {formatDate(formData.check_out || formData.check_in)}
                 </span>
               </div>
               <div className="flex justify-between text-muted-foreground">
