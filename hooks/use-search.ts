@@ -84,8 +84,9 @@ export function useSearch() {
 
         searchStore.stopStreaming();
       } catch (error) {
+        // Show error in the chat panel instead of empty message
+        searchStore.appendStreamText('Sorry, AI search is currently unavailable. You can still browse experiences using the category and region pages, or try again later.');
         searchStore.stopStreaming();
-        toast.error('Search failed. Please try again.');
         console.error('Search error:', error);
       }
     },
