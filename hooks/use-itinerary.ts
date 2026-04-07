@@ -51,9 +51,9 @@ export function useItinerary() {
         store.openPanel();
         toast.success('Itinerary created!');
         return data;
-      } catch (error) {
-        toast.error('Failed to create itinerary');
-        throw error;
+      } catch {
+        toast.error('Could not create itinerary. The service may be temporarily unavailable.');
+        return undefined;
       } finally {
         setIsCreating(false);
       }
