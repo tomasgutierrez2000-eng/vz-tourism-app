@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1.0] - 2026-04-07
+
+### Fixed
+- All 15 `/api/admin/*` routes now require admin token authentication via root middleware (were previously open to the public)
+- `/api/bookings/[id]` now requires authenticated user or admin token, preventing unauthenticated booking enumeration
+- Non-admin users can only view their own bookings (IDOR prevention)
+- `/api/profile` uses explicit column selection instead of `select('*')` to prevent sensitive column leakage
+
+### Added
+- Root `middleware.ts` enforcing admin auth on `/api/admin/*` and session auth on `/api/bookings/:id`
+- 71 security integration tests covering: auth enforcement, IDOR, admin tokens, SQL injection, password leakage, expired tokens, and input validation edge cases
+
 ## [0.2.0.0] - 2026-04-07
 
 ### Added

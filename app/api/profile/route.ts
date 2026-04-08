@@ -8,9 +8,15 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const PROFILE_COLUMNS = [
+    'user_id', 'display_name', 'phone', 'country', 'language',
+    'interests', 'emergency_contact_name', 'emergency_contact_phone',
+    'payment_zelle_email', 'payment_usdt_address', 'avatar_url', 'updated_at',
+  ].join(', ');
+
   const { data, error } = await supabase
     .from('user_profiles')
-    .select('*')
+    .select(PROFILE_COLUMNS)
     .eq('user_id', user.id)
     .single();
 

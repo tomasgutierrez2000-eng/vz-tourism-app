@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createClient as createAuthClient } from '@/lib/supabase/server';
 import { getBooking, updateBookingStatus, type BookingStatus } from '@/lib/bookings-store';
 
 function getSupabase() {
@@ -9,12 +10,31 @@ function getSupabase() {
   return createClient(url, key);
 }
 
+function isAdmin(request: NextRequest): boolean {
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword) return false;
+  const cookieToken = request.cookies.get('admin_token')?.value;
+  const headerToken = request.headers.get('x-admin-token');
+  return cookieToken === adminPassword || headerToken === adminPassword;
+}
+
 interface Params {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(_: NextRequest, { params }: Params) {
+export async function GET(request: NextRequest, { params }: Params) {
   const { id } = await params;
+
+  // Auth: require authenticated user or admin
+  const supabaseAuth = await createAuthClient();
+  const { data: { user } } = supabaseAuth
+    ? await supabaseAuth.auth.getUser()
+    : { data: { user: null } };
+  const admin = isAdmin(request);
+
+  if (!user && !admin) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   // Try Supabase first
   const supabase = getSupabase();
@@ -25,7 +45,13 @@ export async function GET(_: NextRequest, { params }: Params) {
         .select('*')
         .eq('id', id)
         .single();
-      if (!error && data) return NextResponse.json({ data });
+      if (!error && data) {
+        // Non-admin users can only view their own bookings
+        if (!admin && user?.email && data.guest_email !== user.email) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+        return NextResponse.json({ data });
+      }
       if (error?.code !== 'PGRST116') console.error('Supabase GET booking error:', error);
     } catch (err) {
       console.error('Supabase GET booking exception:', err);
@@ -35,6 +61,12 @@ export async function GET(_: NextRequest, { params }: Params) {
   // JSON fallback
   const booking = getBooking(id);
   if (!booking) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // Non-admin users can only view their own bookings
+  if (!admin && user?.email && booking.guest_email !== user.email) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   return NextResponse.json({ data: booking });
 }
 
