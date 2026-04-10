@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import type { RutaRideType, RutaVehicleClass } from '@/types/ruta'
+import { useRouter } from 'next/navigation'
+import type { RutaRideType, RutaVehicleClass, RutaPaymentMethod } from '@/types/ruta'
 import { RUTA_MIN_LEAD_TIMES } from '@/types/ruta'
 import { AirportSelect, type LocationResult } from './AirportSelect'
 import { LocationInput } from './LocationInput'
@@ -38,6 +39,7 @@ interface QuoteResult {
 }
 
 export function BookingForm({ activeService, onServiceChange }: BookingFormProps) {
+  const router = useRouter()
   const [pickupLocation, setPickupLocation] = useState<LocationResult | null>(null)
   const [dropoffLocation, setDropoffLocation] = useState<LocationResult | null>(null)
   const [date, setDate] = useState('')
@@ -47,6 +49,15 @@ export function BookingForm({ activeService, onServiceChange }: BookingFormProps
   const [quote, setQuote] = useState<QuoteResult | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
+
+  // Checkout step state
+  const [showCheckout, setShowCheckout] = useState(false)
+  const [passengerName, setPassengerName] = useState('')
+  const [passengerEmail, setPassengerEmail] = useState('')
+  const [passengerPhone, setPassengerPhone] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<RutaPaymentMethod>('stripe')
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
 
   const getMinDateTime = useCallback(() => {
     const leadMinutes = RUTA_MIN_LEAD_TIMES[activeService]
@@ -78,6 +89,7 @@ export function BookingForm({ activeService, onServiceChange }: BookingFormProps
     setQuote(null)
 
     try {
+      if (!pickupLocation || !dropoffLocation) return
       const params = new URLSearchParams({
         ride_type: activeService,
         pickup_lat: String(pickupLocation.lat),
@@ -107,6 +119,62 @@ export function BookingForm({ activeService, onServiceChange }: BookingFormProps
       )
     } finally {
       setQuoteLoading(false)
+    }
+  }
+
+  const handleCheckout = async () => {
+    if (!passengerName.trim() || !passengerEmail.trim() || !passengerPhone.trim()) {
+      setCheckoutError('Please fill in all passenger details.')
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(passengerEmail)) {
+      setCheckoutError('Please enter a valid email address.')
+      return
+    }
+    if (!quote || !pickupLocation || !dropoffLocation) return
+
+    setCheckoutLoading(true)
+    setCheckoutError(null)
+
+    try {
+      const res = await fetch('/api/ruta/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ride_type: activeService,
+          pickup_lat: pickupLocation.lat,
+          pickup_lng: pickupLocation.lng,
+          pickup_address: pickupLocation.address,
+          dropoff_lat: dropoffLocation.lat,
+          dropoff_lng: dropoffLocation.lng,
+          dropoff_address: dropoffLocation.address,
+          vehicle_class: vehicleClass,
+          scheduled_at: new Date(`${date}T${time}:00-04:00`).toISOString(),
+          passengers: Number(passengers),
+          passenger_name: passengerName.trim(),
+          passenger_email: passengerEmail.trim(),
+          passenger_phone: passengerPhone.trim(),
+          payment_method: paymentMethod,
+          price_quoted_usd: quote.price_usd,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Checkout failed')
+      }
+
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url
+      } else {
+        router.push(`/ruta/book/confirmation?ride_id=${data.ride_id}&token=${data.access_token}`)
+      }
+    } catch (err) {
+      setCheckoutError(
+        err instanceof Error ? err.message : 'Something went wrong. Please try again.'
+      )
+    } finally {
+      setCheckoutLoading(false)
     }
   }
 
@@ -406,12 +474,105 @@ export function BookingForm({ activeService, onServiceChange }: BookingFormProps
               </div>
             )}
           </div>
-          <button
-            className="w-full py-4 text-sm font-bold uppercase tracking-widest transition-opacity hover:opacity-90"
-            style={{ background: '#c9a96e', color: '#0a0a0a' }}
-          >
-            Book Now - Pay ${quote.price_usd.toFixed(2)}
-          </button>
+          {!showCheckout ? (
+            <button
+              onClick={() => setShowCheckout(true)}
+              className="w-full py-4 text-sm font-bold uppercase tracking-widest transition-opacity hover:opacity-90"
+              style={{ background: '#c9a96e', color: '#0a0a0a' }}
+            >
+              Book Now - ${quote.price_usd.toFixed(2)}
+            </button>
+          ) : (
+            <div className="space-y-4 mt-4 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <p className="text-xs uppercase tracking-wider" style={{ color: '#999' }}>
+                Passenger Details
+              </p>
+              <input
+                type="text"
+                placeholder="Full Name *"
+                value={passengerName}
+                onChange={(e) => setPassengerName(e.target.value)}
+                className="w-full py-3 px-4 text-sm outline-none"
+                style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: '#e8e8e8',
+                }}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="email"
+                  placeholder="Email *"
+                  value={passengerEmail}
+                  onChange={(e) => setPassengerEmail(e.target.value)}
+                  className="w-full py-3 px-4 text-sm outline-none"
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#e8e8e8',
+                  }}
+                />
+                <input
+                  type="tel"
+                  placeholder="Phone *"
+                  value={passengerPhone}
+                  onChange={(e) => setPassengerPhone(e.target.value)}
+                  className="w-full py-3 px-4 text-sm outline-none"
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#e8e8e8',
+                  }}
+                />
+              </div>
+
+              <p className="text-xs uppercase tracking-wider mt-2" style={{ color: '#999' }}>
+                Payment Method
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {(['stripe', 'zelle'] as const).map((method) => (
+                  <button
+                    key={method}
+                    onClick={() => setPaymentMethod(method)}
+                    className="py-3 px-4 text-xs uppercase tracking-wider text-center transition-all"
+                    style={{
+                      background: paymentMethod === method ? 'rgba(201,169,110,0.05)' : 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${paymentMethod === method ? '#c9a96e' : 'rgba(255,255,255,0.08)'}`,
+                      color: paymentMethod === method ? '#c9a96e' : '#888',
+                    }}
+                  >
+                    {method === 'stripe' ? 'Credit Card' : 'Zelle'}
+                  </button>
+                ))}
+              </div>
+
+              {checkoutError && (
+                <div className="p-3 text-xs" role="alert" style={{
+                  background: 'rgba(239,68,68,0.1)',
+                  border: '1px solid rgba(239,68,68,0.2)',
+                  color: '#f87171',
+                }}>
+                  {checkoutError}
+                </div>
+              )}
+
+              <button
+                onClick={handleCheckout}
+                disabled={checkoutLoading}
+                className="w-full py-4 text-sm font-bold uppercase tracking-widest transition-opacity hover:opacity-90 disabled:opacity-40"
+                style={{ background: '#c9a96e', color: '#0a0a0a' }}
+              >
+                {checkoutLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    Processing...
+                  </span>
+                ) : (
+                  `Confirm & Pay $${quote.price_usd.toFixed(2)}`
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
