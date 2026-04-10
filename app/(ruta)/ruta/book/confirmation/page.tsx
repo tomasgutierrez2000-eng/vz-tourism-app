@@ -1,12 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { RutaNav } from '@/components/ruta/RutaNav'
 import type { RutaRide } from '@/types/ruta'
 import Link from 'next/link'
 
-export default function BookingConfirmation() {
+export default function BookingConfirmationPage() {
+  return (
+    <Suspense fallback={<><RutaNav /><div className="min-h-screen flex items-center justify-center pt-20"><p style={{ color: '#888' }}>Loading...</p></div></>}>
+      <BookingConfirmation />
+    </Suspense>
+  )
+}
+
+function BookingConfirmation() {
   const searchParams = useSearchParams()
   const rideId = searchParams.get('ride_id')
   const token = searchParams.get('token')
