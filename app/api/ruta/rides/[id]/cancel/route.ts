@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { calculateRefund } from '@/lib/ruta/cancellation'
+import { createRutaRefund } from '@/lib/ruta/stripe'
 import { isValidTransition } from '@/lib/ruta/ride-status'
 import type { RutaRideStatus } from '@/types/ruta'
 
@@ -99,8 +100,31 @@ export async function POST(
     )
   }
 
-  // TODO: Trigger Stripe refund if payment_method === 'stripe' && refund.refund_amount_usd > 0
-  // TODO: Send cancellation notification
+  // Execute Stripe refund if applicable
+  if (
+    ride.payment_method === 'stripe' &&
+    refund.refund_amount_usd > 0 &&
+    ride.stripe_payment_intent_id
+  ) {
+    try {
+      await createRutaRefund(ride.stripe_payment_intent_id, refund.refund_amount_usd)
+      await dbClient
+        .from('ruta_rides')
+        .update({ payment_status: 'refunded' })
+        .eq('id', rideId)
+    } catch (refundErr) {
+      console.error('Stripe refund failed:', refundErr)
+      // Continue with cancellation even if refund fails — log for manual followup
+    }
+  }
+
+  // Reset driver status if a driver was assigned
+  if (ride.driver_id) {
+    await dbClient
+      .from('ruta_drivers')
+      .update({ status: 'available' })
+      .eq('id', ride.driver_id)
+  }
 
   return NextResponse.json({
     success: true,
