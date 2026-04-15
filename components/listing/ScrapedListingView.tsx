@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { MapPin, Phone, Globe, Share2, Bell, ExternalLink } from 'lucide-react';
+import { FavoriteButton } from '@/components/listing/FavoriteButton';
 import type { ScrapedListing } from '@/lib/local-listings';
 
 interface ScrapedListingViewProps {
@@ -109,7 +110,10 @@ export function ScrapedListingView({ listing }: ScrapedListingViewProps) {
             Not yet on platform
           </span>
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">{listing.name}</h1>
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">{listing.name}</h1>
+          <FavoriteButton listingId={listing.id} className="scale-125 flex-shrink-0" />
+        </div>
         <div className="flex items-center gap-1 text-gray-500 text-sm">
           <MapPin className="w-4 h-4 flex-shrink-0" />
           <span>{listing.address || regionLabel}</span>
